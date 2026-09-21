@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff;
+            overflow-x: hidden;
+            -webkit-text-size-adjust: 100%;
+        }
+        #osmd-container { width: 100%; }
+        #status {
+            font-family: sans-serif;
+            padding: 24px;
+            color: #b3261e;
+            line-height: 1.5;
+            display: none;
+        }
+    </style>
+    <script src="opensheetmusicdisplay.min.js"></script>
+</head>
+<body>
+    <div id="status"></div>
+    <div id="osmd-container"></div>
+    <script>
+        var osmd = null;
+        var pendingXml = null;
+
+        // Reports back to Kotlin if the AndroidOsmd bridge is available.
+        function report(type, message) {
+            if (window.AndroidOsmd) {
+                try { window.AndroidOsmd.onStatus(type, message || ""); } catch (e) {}
+            }
+        }
+
+        function showError(message) {
+            var el = document.getElementById("status");
+            el.style.display = "block";
+            el.textContent = message;
+            report("error", message);
+        }
+
+        function initOsmd() {
+            if (typeof opensheetmusicdisplay === "undefined") {
+                showError("OpenSheetMusicDisplay konnte nicht geladen werden. " +
+                          "Bitte 'opensheetmusicdisplay.min.js' in app/src/main/assets/osmd/ ablegen.");
+                return false;
+            }
+            try {
+                osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay("osmd-container", {
+                    autoResize: true,
+                    backend: "svg",
+                    drawTitle: true,
+                    drawSubtitle: true,
+                    drawComposer: true,
+                    drawLyricist: true,
+                    drawMetronomeMarks: true,
+                    drawPartNames: true,
+                    drawPartAbbreviations: true,
+                    drawMeasureNumbers: true,
+                    drawMeasureNumbersOnlyAtSystemStart: false,
+                    drawFingerings: true,
+                    fillEmptyMeasuresWithMultiMeasureRests: true,
+                    cursorsOptions: [{ type: 0, color: "#33e02f", alpha: 0.5, follow: true }]
+                });
+                return true;
+            } catch (e) {
+                showError("OSMD konnte nicht initialisiert werden: " + e.message);
+                return false;
+            }
+        }
+
+        // Called from Kotlin. Returns immediately; completion is reported via the bridge.
+        function loadMusicXML(xmlString) {
+            if (!osmd) {
+                pendingXml = xmlString;
+                return;
+            }
+            document.getElementById("status").style.display = "none";
+            report("loading", "");
+            osmd.load(xmlString).then(function () {
+                osmd.render();
+                report("rendered", String(osmd.Sheet.SourceMeasures.length));
+            }).catch(function (error) {
+                showError("Die Notendatei konnte nicht gelesen werden: " + error);
+            });
+        }
+
+        function setZoom(factor) {
+            if (!osmd) return;
+            osmd.Zoom = factor;
+            osmd.render();
+        }
+
+        function setDarkMode(enabled) {
+            document.body.style.backgroundColor = enabled ? "#000000" : "#ffffff";
+            if (!osmd) return;
+            osmd.setOptions({ defaultColorMusic: enabled ? "#FFFFFF" : "#000000" });
+            osmd.render();
+        }
+
+        window.addEventListener("load", function () {
+            if (initOsmd()) {
+                report("ready", "");
+                if (pendingXml !== null) {
+                    loadMusicXML(pendingXml);
+                    pendingXml = null;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

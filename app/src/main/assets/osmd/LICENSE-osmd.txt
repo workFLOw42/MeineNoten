@@ -1,0 +1,24 @@
+OpenSheetMusicDisplay (OSMD)
+============================
+Die Datei "opensheetmusicdisplay.min.js" in diesem Ordner ist ein unveraendertes
+Build-Artefakt des Projekts OpenSheetMusicDisplay.
+
+  Projekt : https://github.com/opensheetmusicdisplay/opensheetmusicdisplay
+  Lizenz  : BSD-3-Clause
+  (c) OpenSheetMusicDisplay contributors
+
+OSMD buendelt weitere Open-Source-Bibliotheken, u. a.:
+
+  VexFlow          - MIT License - https://github.com/0xfe/vexflow
+  JSZip            - MIT / GPLv3 - https://github.com/Stuk/jszip
+  loglevel         - MIT License - https://github.com/pimterry/loglevel
+
+Die vollstaendigen Lizenztexte stehen in der Datei
+"opensheetmusicdisplay.min.js.LICENSE.txt", die dem offiziellen OSMD-Release
+beiliegt. Sie wurde hier nicht mitgeliefert und sollte vor einer
+Veroeffentlichung der App aus dem Release-Archiv ergaenzt werden:
+
+  https://github.com/opensheetmusicdisplay/opensheetmusicdisplay/releases
+
+Hinweis: Die Datei "opensheetmusicdisplay.min.js.map" (Source Map) wird zur
+Laufzeit nicht benoetigt und ist absichtlich nicht Teil der App.

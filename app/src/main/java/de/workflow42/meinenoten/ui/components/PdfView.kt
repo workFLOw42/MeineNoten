@@ -1,0 +1,217 @@
+package de.workflow42.meinenoten.ui.components
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
+import android.net.Uri
+import android.os.ParcelFileDescriptor
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+
+/** Global cache for all PDFs, so switching between songs in a setlist is instant. */
+private object GlobalPdfCache {
+    // Map of URI -> (Page -> Bitmap)
+    private val caches = mutableMapOf<String, MutableMap<Int, Bitmap>>()
+    private const val MAX_TOTAL_BITMAPS = 12
+
+    fun get(uri: String, page: Int): Bitmap? = caches[uri]?.get(page)
+
+    fun put(uri: String, page: Int, bitmap: Bitmap) {
+        val songCache = caches.getOrPut(uri) { mutableMapOf() }
+        songCache[page] = bitmap
+        trim()
+    }
+
+    private fun trim() {
+        // Flatten all cached pages to a list of (uri, page)
+        val allEntries = caches.flatMap { (uri, map) -> map.keys.map { uri to it } }
+        if (allEntries.size <= MAX_TOTAL_BITMAPS) return
+
+        // Simple cleanup: remove pages furthest from any "active" state could be hard.
+        // For now, just remove the first few entries found until we are under limit.
+        var removed = 0
+        val targetRemove = allEntries.size - MAX_TOTAL_BITMAPS
+        
+        val iterator = caches.iterator()
+        while (iterator.hasNext() && removed < targetRemove) {
+            val entry = iterator.next()
+            val pageIterator = entry.value.iterator()
+            while (pageIterator.hasNext() && removed < targetRemove) {
+                val pageEntry = pageIterator.next()
+                pageEntry.value.recycle()
+                pageIterator.remove()
+                removed++
+            }
+            if (entry.value.isEmpty()) {
+                iterator.remove()
+            }
+        }
+    }
+}
+
+/**
+ * Renders a single page of a PDF file.
+ *
+ * Neighbouring pages are pre-rendered in the background so that turning a page
+ * during a performance happens without any visible delay.
+ */
+@Composable
+fun PdfView(
+    fileUri: String,
+    currentPage: Int,
+    modifier: Modifier = Modifier,
+    onPageCountReady: (Int) -> Unit = {}
+) {
+    val context = LocalContext.current
+    var visible by remember(fileUri, currentPage) { 
+        mutableStateOf(GlobalPdfCache.get(fileUri, currentPage)) 
+    }
+    var pageCount by remember(fileUri) { mutableIntStateOf(0) }
+    var error by remember(fileUri) { mutableStateOf<String?>(null) }
+
+    // Target width in pixels, capped so large scores stay memory friendly.
+    val targetWidth = remember {
+        val metrics = context.resources.displayMetrics
+        (maxOf(metrics.widthPixels, metrics.heightPixels) * 1.5f).toInt().coerceAtMost(3000)
+    }
+
+    LaunchedEffect(fileUri, currentPage) {
+        if (fileUri.isEmpty()) {
+            error = "Keine Datei ausgewählt"
+            return@LaunchedEffect
+        }
+
+        GlobalPdfCache.get(fileUri, currentPage)?.let { visible = it }
+
+        withContext(Dispatchers.IO) {
+            try {
+                openRenderer(context, fileUri).use { pfd ->
+                    PdfRenderer(pfd).use { renderer ->
+                        if (pageCount != renderer.pageCount) {
+                            pageCount = renderer.pageCount
+                            withContext(Dispatchers.Main) { onPageCountReady(renderer.pageCount) }
+                        }
+                        if (currentPage !in 0 until renderer.pageCount) return@use
+
+                        // Render the requested page first, then its neighbours.
+                        val order = listOf(currentPage, currentPage + 1, currentPage - 1)
+                        for (index in order) {
+                            if (index !in 0 until renderer.pageCount) continue
+                            if (GlobalPdfCache.get(fileUri, index) != null) {
+                                if (index == currentPage) withContext(Dispatchers.Main) {
+                                    visible = GlobalPdfCache.get(fileUri, index)
+                                    error = null
+                                }
+                                continue
+                            }
+                            val bitmap = renderer.renderPage(index, targetWidth)
+                            GlobalPdfCache.put(fileUri, index, bitmap)
+                            if (index == currentPage) withContext(Dispatchers.Main) {
+                                visible = bitmap
+                                error = null
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { error = e.message ?: "PDF konnte nicht geladen werden" }
+            }
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        visible?.takeIf { !it.isRecycled }?.let { bitmap ->
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Seite ${currentPage + 1}",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        if (visible == null && error == null) {
+            CircularProgressIndicator()
+        }
+
+        error?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(24.dp)
+            )
+        }
+    }
+}
+
+private fun openRenderer(context: Context, fileUri: String): ParcelFileDescriptor {
+    val uri = Uri.parse(fileUri)
+    return if (uri.scheme == "content") {
+        context.contentResolver.openFileDescriptor(uri, "r")
+            ?: throw IllegalStateException("Datei konnte nicht geöffnet werden")
+    } else {
+        val file = File(uri.path ?: "")
+        if (!file.exists()) throw IllegalStateException("Datei existiert nicht")
+        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+    }
+}
+
+/** Renders one page scaled to [targetWidth], preserving the aspect ratio. */
+private fun PdfRenderer.renderPage(index: Int, targetWidth: Int): Bitmap =
+    openPage(index).use { page ->
+        val scale = targetWidth.toFloat() / page.width
+        val width = targetWidth
+        val height = (page.height * scale).toInt().coerceAtLeast(1)
+        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+            bitmap.eraseColor(Color.WHITE)
+            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        }
+    }
+
+/**
+ * Invisible component that pre-loads the first page of a PDF into the global cache.
+ */
+@Composable
+fun PdfPreloader(fileUri: String) {
+    val context = LocalContext.current
+    val targetWidth = remember {
+        val metrics = context.resources.displayMetrics
+        (maxOf(metrics.widthPixels, metrics.heightPixels) * 1.5f).toInt().coerceAtMost(3000)
+    }
+
+    LaunchedEffect(fileUri) {
+        if (fileUri.isEmpty() || GlobalPdfCache.get(fileUri, 0) != null) return@LaunchedEffect
+
+        withContext(Dispatchers.IO) {
+            try {
+                openRenderer(context, fileUri).use { pfd ->
+                    PdfRenderer(pfd).use { renderer ->
+                        if (renderer.pageCount > 0) {
+                            val bitmap = renderer.renderPage(0, targetWidth)
+                            GlobalPdfCache.put(fileUri, 0, bitmap)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Preload failure is silent
+            }
+        }
+    }
+}
