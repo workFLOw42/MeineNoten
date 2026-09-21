@@ -1,12 +1,48 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
+# R8 keep rules for Meine Noten.
+# AGP combines all keep rule files in src/main/keepRules and passes them to R8.
 #
 # For more details, see
 #   https://d.android.com/r/tools/r8/keep-rules
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+
+# --- WebView JavaScript bridge -------------------------------------------------
+# MusicXmlView registers an anonymous object as "AndroidOsmd". Its onStatus()
+# method is only ever called from JavaScript inside assets/osmd/index.html, so
+# R8 sees no caller and would remove it. That would break MusicXML rendering
+# (the loading spinner would never disappear and errors would stay silent).
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+
+# --- kotlinx.serialization ----------------------------------------------------
+# Song, Setlist and SongSource are persisted to songs.json / setlists.json.
+# If R8 renames their fields or strips the generated serializers, previously
+# saved files can no longer be read - existing users would lose their library.
+# Keep the data classes and their generated $$serializer companions intact.
+-keep,includedescriptorclasses class de.workflow42.meinenoten.model.** { *; }
+
+-keepclassmembers class de.workflow42.meinenoten.model.** {
+    *** Companion;
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+-keepclasseswithmembers class de.workflow42.meinenoten.model.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Generated serializer classes carry a $$serializer suffix.
+-keep class de.workflow42.meinenoten.model.**$$serializer { *; }
+
+# Enum values are matched by name when deserializing SongSource.
+-keepclassmembers enum de.workflow42.meinenoten.model.** {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+
+# --- Crash readability --------------------------------------------------------
+# Keep line numbers so stack traces in Play Console stay useful, but still allow
+# class names to be obfuscated. Requires uploading the mapping file.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
