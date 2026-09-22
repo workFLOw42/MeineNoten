@@ -36,6 +36,7 @@ import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
 import de.workflow42.meinenoten.ui.components.DateField
+import de.workflow42.meinenoten.ui.components.GenreChips
 import de.workflow42.meinenoten.ui.components.PdfPreloader
 import de.workflow42.meinenoten.ui.components.SetlistStrip
 import de.workflow42.meinenoten.ui.screens.SetlistDetailScreen
@@ -145,6 +146,12 @@ fun MainApp() {
     var newSongTitle by remember { mutableStateOf("") }
     var newSongArtist by remember { mutableStateOf("") }
     var newSongVersion by remember { mutableStateOf("") }
+    var newSongGenre by remember { mutableStateOf("") }
+
+    // Genres already in use, offered as chips so categories stay consistent.
+    val knownGenres = remember(songs.toList()) {
+        songs.map { it.genre }.filter { it.isNotBlank() }.distinct().sorted()
+    }
 
     var showAddToSetlistDialog by remember { mutableStateOf<Song?>(null) }
     var showCreateSetlistDialog by remember { mutableStateOf(false) }
@@ -186,6 +193,18 @@ fun MainApp() {
                         label = { Text("Version") },
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth()
                     )
+                    TextField(
+                        value = newSongGenre,
+                        onValueChange = { newSongGenre = it },
+                        label = { Text("Genre") },
+                        singleLine = true,
+                        modifier = Modifier.padding(top = 8.dp).fillMaxWidth()
+                    )
+                    GenreChips(
+                        suggestions = knownGenres,
+                        selected = newSongGenre,
+                        onSelect = { newSongGenre = it }
+                    )
                 }
             },
             confirmButton = {
@@ -196,13 +215,15 @@ fun MainApp() {
                             val importedSong = repository.importSong(uri, newSongTitle)
                             val songWithMetadata = importedSong.copy(
                                 artist = newSongArtist,
-                                version = newSongVersion
+                                version = newSongVersion,
+                                genre = newSongGenre.trim()
                             )
                             songs.add(songWithMetadata)
                             repository.saveSongs(songs)
 
                             newSongArtist = ""
                             newSongVersion = ""
+                            newSongGenre = ""
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
@@ -245,6 +266,18 @@ fun MainApp() {
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth()
                     )
                     TextField(
+                        value = newSongGenre,
+                        onValueChange = { newSongGenre = it },
+                        label = { Text("Genre") },
+                        singleLine = true,
+                        modifier = Modifier.padding(top = 8.dp).fillMaxWidth()
+                    )
+                    GenreChips(
+                        suggestions = knownGenres,
+                        selected = newSongGenre,
+                        onSelect = { newSongGenre = it }
+                    )
+                    TextField(
                         value = newSetlistNotes, // Reusing notes state for song notes
                         onValueChange = { newSetlistNotes = it },
                         label = { Text("Notes / Chords / Lyrics") },
@@ -261,6 +294,7 @@ fun MainApp() {
                             title = newSongTitle,
                             artist = newSongArtist,
                             version = newSongVersion,
+                            genre = newSongGenre.trim(),
                             fileUri = "", // No file for manual song
                             sourceType = SongSource.TEXT,
                             notes = newSetlistNotes
@@ -271,6 +305,7 @@ fun MainApp() {
                         newSongTitle = ""
                         newSongArtist = ""
                         newSongVersion = ""
+                        newSongGenre = ""
                         newSetlistNotes = ""
                         showAddManualSongDialog = false
                     }
@@ -402,7 +437,18 @@ fun MainApp() {
         ) {
             SongListScreen(
                 songs = songs,
-                onSongClick = { navigator.navigate(AppRoute.SongDetail(it.id)) },
+                setlists = setlists,
+                onSongClick = { song, filterSetlistId ->
+                    navigator.navigate(
+                        AppRoute.SongDetail(
+                            songId = song.id,
+                            setlistId = filterSetlistId,
+                            // A setlist filter means rehearsal prep, so honour the saved
+                            // page; only the setlist screen itself forces page 1.
+                            resumeLastPage = true
+                        )
+                    )
+                },
                 onImportPdf = {
                     pdfLauncher.launch(
                         arrayOf(
@@ -464,6 +510,10 @@ fun MainApp() {
                     },
                     openAtEnd = key.openAtEnd,
                     resumeLastPage = key.resumeLastPage,
+                    // On compact widths the strip cannot live in the rail, so the detail
+                    // screen shows its own horizontal version.
+                    showSetlistStrip = showBackButton,
+                    knownGenres = knownGenres,
                     onBackClick = { navigator.goBack() },
                     showBackButton = showBackButton,
                     onPageTurn = { lastPageTurnTime = System.currentTimeMillis() },
@@ -512,7 +562,16 @@ fun MainApp() {
                     songs = songs,
                     onSongClick = {
                         // Pass the setlist along so paging can cross song boundaries.
-                        navigator.navigate(AppRoute.SongDetail(it.id, setlist.id))
+                        // Always start at page 1: during a service a song is announced
+                        // from the top, so resuming a page from the last rehearsal is
+                        // never what is wanted here.
+                        navigator.navigate(
+                            AppRoute.SongDetail(
+                                songId = it.id,
+                                setlistId = setlist.id,
+                                resumeLastPage = false
+                            )
+                        )
                     },
                     onBackClick = { navigator.goBack() },
                     showBackButton = showBackButton,

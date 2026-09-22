@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -37,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -44,15 +46,30 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
+import de.workflow42.meinenoten.ui.components.GenreChips
 import de.workflow42.meinenoten.ui.components.MusicXmlView
 import de.workflow42.meinenoten.ui.components.PdfView
+import de.workflow42.meinenoten.ui.components.SetlistStripHorizontal
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+
+/**
+ * Page-turn cue colour. Matches the setlist strip highlight so both cues read as the
+ * same signal rather than two unrelated events.
+ */
+private val FlashGreen = Color(0xFF7BA07E)
+
+/**
+ * Deliberately narrow: wide enough to register in peripheral vision while playing,
+ * narrow enough to never cover a stave.
+ */
+private val FlashBorderWidth = 6.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +81,11 @@ fun SongDetailScreen(
     onSongDeleted: (Song) -> Unit,
     modifier: Modifier = Modifier,
     showBackButton: Boolean = true,
+    /**
+     * Genres already in use, offered as chips in the edit dialog so the same category
+     * is not re-typed with a different spelling.
+     */
+    knownGenres: List<String> = emptyList(),
     /** Ordered songs of the setlist this song was opened from; empty otherwise. */
     setlistSongs: List<Song> = emptyList(),
     /** Opens another song. The flag requests its last page instead of its first. */
@@ -72,6 +94,12 @@ fun SongDetailScreen(
     openAtEnd: Boolean = false,
     /** If true, resumes at [Song.lastPage]; if false, starts at page 1. */
     resumeLastPage: Boolean = true,
+    /**
+     * True on compact widths, where the navigation rail (and with it the vertical
+     * [SetlistStripHorizontal] counterpart) is not shown. The screen then hosts its own
+     * position indicator so the running order stays visible on a phone.
+     */
+    showSetlistStrip: Boolean = false,
     /** Called when a page turn occurs (for UI cues). */
     onPageTurn: () -> Unit = {}
 ) {
@@ -174,6 +202,7 @@ fun SongDetailScreen(
     var editTitle by remember(song) { mutableStateOf(song.title) }
     var editArtist by remember(song) { mutableStateOf(song.artist) }
     var editVersion by remember(song) { mutableStateOf(song.version) }
+    var editGenre by remember(song) { mutableStateOf(song.genre) }
     var editBpm by remember(song) { mutableStateOf(song.bpm.toString()) }
     var editTimeSignature by remember(song) { mutableStateOf(song.timeSignature) }
     var editTotalBars by remember(song) { mutableStateOf(song.totalBars.toString()) }
@@ -181,6 +210,10 @@ fun SongDetailScreen(
     
     val songSetlists = remember(song.id, allSetlists) {
         allSetlists.filter { it.songIds.contains(song.id) }
+    }
+
+    val genreSuggestions = remember(knownGenres) {
+        knownGenres.filter { it.isNotBlank() }.distinct().sorted()
     }
 
     // Display Always On logic
@@ -270,6 +303,19 @@ fun SongDetailScreen(
                         modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()
                     )
                     TextField(
+                        value = editGenre,
+                        onValueChange = { editGenre = it },
+                        label = { Text("Genre") },
+                        singleLine = true,
+                        modifier = Modifier.padding(bottom = 4.dp).fillMaxWidth()
+                    )
+                    GenreChips(
+                        suggestions = genreSuggestions,
+                        selected = editGenre,
+                        onSelect = { editGenre = it },
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    TextField(
                         value = editBpm,
                         onValueChange = { editBpm = it },
                         label = { Text("BPM") },
@@ -326,6 +372,9 @@ fun SongDetailScreen(
                         title = editTitle,
                         artist = editArtist,
                         version = editVersion,
+                        // Trimmed, because a stray space would create a second
+                        // category that looks identical in the list.
+                        genre = editGenre.trim(),
                         bpm = editBpm.toIntOrNull() ?: song.bpm,
                         timeSignature = editTimeSignature,
                         totalBars = editTotalBars.toIntOrNull() ?: song.totalBars,
@@ -366,7 +415,19 @@ fun SongDetailScreen(
                 exit = slideOutVertically(targetOffsetY = { -it })
             ) {
                 TopAppBar(
-                    title = { Text(text = song.displayTitle) },
+                    title = {
+                        // Prefixing the running-order position keeps "which song am I in"
+                        // answerable even where the setlist strip has no room.
+                        Text(
+                            text = if (setlistIndex >= 0 && setlistSongs.size > 1) {
+                                "${setlistIndex + 1}/${setlistSongs.size} · ${song.displayTitle}"
+                            } else {
+                                song.displayTitle
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     navigationIcon = {
                         if (showBackButton) {
                             IconButton(onClick = onBackClick) {
@@ -382,6 +443,7 @@ fun SongDetailScreen(
                             editTitle = song.title
                             editArtist = song.artist
                             editVersion = song.version
+                            editGenre = song.genre
                             editBpm = song.bpm.toString()
                             editTimeSignature = song.timeSignature
                             editTotalBars = song.totalBars.toString()
@@ -513,8 +575,17 @@ fun SongDetailScreen(
                 }
             }
 
-            // The page-turn cue lives in the setlist strip instead of a full-screen
-            // overlay, which used to wash out the score at the moment it was needed.
+            // Page-turn cue. A narrow band at the edges instead of the former
+            // full-screen veil, which washed out the score at the exact moment it was
+            // needed. Works without a setlist too, which the strip highlight cannot.
+            if (flashAlpha.value > 0f) {
+                val cueAlpha = (flashAlpha.value * 4f).coerceAtMost(0.8f)
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .border(FlashBorderWidth, FlashGreen.copy(alpha = cueAlpha))
+                )
+            }
 
             // Crossing into another song is a bigger jump than a page turn, so it gets
             // named explicitly rather than relying on the flash alone.
@@ -564,6 +635,22 @@ fun SongDetailScreen(
                     }
                 }
             }
+            // Compact widths have no navigation rail, so the setlist strip lives here
+            // instead. Without it there is no way to see the running order position on a
+            // phone, in portrait or landscape.
+            if (showSetlistStrip && setlistSongs.size > 1) {
+                SetlistStripHorizontal(
+                    songs = setlistSongs,
+                    currentSongId = song.id,
+                    flashAlpha = flashAlpha.value,
+                    onSongClick = { target -> onNavigateToSong(target, false) },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(innerPadding)
+                        .padding(start = 12.dp, top = 8.dp, end = 12.dp)
+                )
+            }
+
             // Page navigation bar, shown with the rest of the UI.
             if (isUiVisible && isPagedDocument && pageCount > 1) {
                 Surface(

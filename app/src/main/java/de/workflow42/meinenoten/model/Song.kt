@@ -15,6 +15,12 @@ data class Song(
     val version: String = "",
     val fileUri: String,
     val sourceType: SongSource = SongSource.PDF,
+    /**
+     * Free text, e.g. "Gospel", "Taizé", "Weihnachten". Deliberately not an enum: a
+     * fixed list would need a code change for every new style, and the useful
+     * categories here are as much occasion as musical genre.
+     */
+    val genre: String = "",
     val bpm: Int = 120,
     val timeSignature: String = "4/4",
     val totalBars: Int = 0,

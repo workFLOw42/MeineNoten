@@ -26,11 +26,16 @@ Seitenaufbau, keine Fehlbedienung durch versehentliches Antippen.
 | Blättern | Wischen links/rechts |
 | Blättern | Tipp-Zonen: linkes/rechtes Drittel blättert, Mitte schaltet UI |
 | Blättern | Seitenleiste unten mit Pfeilen und Seitenzähler |
-| Blättern | Grüner Blitz als optische Rückmeldung |
-| Komfort | Letzte Seite wird pro Song gespeichert |
+| Blättern | Randblitz als optische Rückmeldung |
+| Blättern | Am Liedende in der Setlist zum nächsten Lied weiterblättern |
+| Komfort | Letzte Seite wird pro Song gespeichert (Songliste), Setlists starten auf Seite 1 |
 | Komfort | Display-Timeout deaktiviert, solange Noten offen sind |
+| Komfort | Sprungleiste mit Positionsnummern, waagerecht auf dem Telefon, senkrecht auf dem Tablet |
 | Daten | Import kopiert Dateien in den App-Speicher |
 | Daten | Setlists: anlegen, sortieren, Notizen |
+| Daten | Lieder löschen samt Datei und Setlist-Verweisen |
+| Daten | Genre als freies Metadatum mit Vorschlags-Chips |
+| Daten | Songliste nach Genre und Setlist filtern, vier Sortiermodi |
 | Daten | Persistenz als JSON via kotlinx.serialization |
 | UI | Material 3, adaptiv (Navigation Bar / Rail je nach Ausrichtung) |
 | Auslieferung | Release-Build mit R8 verkleinert, signiert, Play-tauglich |
@@ -69,16 +74,14 @@ ein einfaches Metronom bauen oder die Felder entfernen – Entscheidung steht au
 
 ### In Arbeit
 
-Die folgenden Punkte sind beschlossen und werden als nächstes umgesetzt. Details in
-Abschnitt 3 und 4.
+Die in früheren Fassungen hier gelisteten Punkte sind umgesetzt und in Abschnitt 3 und 4
+beschrieben. Offen bleibt nur:
 
-*   Lieder über den Bearbeiten-Dialog löschen
-*   Listen alphabetisch statt in Einfügereihenfolge
-*   Einspaltige Liste statt Kachelraster
-*   Setlists nach Datum, neueste oben
-*   Konzertdatum über Datumsauswahl statt Freitext
-*   Am Liedende in der Setlist zum nächsten Lied weiterblättern
-*   Sprungleiste mit Vorschaubildern in der Notenansicht
+*   Konzertdatum über Datumsauswahl statt Freitext – `DateField` existiert, die einmalige
+    Deutung bestehender Freitext-Einträge ist noch nicht auf echten Daten geprüft.
+*   Entscheidung über `bpm`, `timeSignature`, `totalBars`: Metronom bauen oder Felder
+    entfernen.
+*   Abschnitt 5a (eigene Kompositionen) ist noch nicht ausgearbeitet.
 
 ---
 
@@ -90,7 +93,7 @@ Die App wird über Google Play ausgeliefert. Was dafür eingerichtet ist:
 |---|---|
 | Signierung | eigener Keystore, Zugangsdaten in `local.properties` (nicht im Repo) |
 | `targetSdk` | 36 – Play-Mindestanforderung |
-| Verkleinerung | R8 aktiv, 14,64 MB → 5,18 MB |
+| Verkleinerung | R8 aktiv, 14,64 MB → 5,24 MB |
 | Quellcode | GitHub, `workFLOw42/MeineNoten` |
 | Datenschutzerklärung | `docs/privacy-policy.html` über GitHub Pages |
 | Store-Texte | Kurz- und Langbeschreibung liegen vor |
@@ -106,6 +109,7 @@ veröffentlicht wurde.
 | 1 | 1.0 | verbraucht, `targetSdk` war noch 35 |
 | 2 | 1.0.1 | `targetSdk` 36, erstes veröffentlichtes Release |
 | 3 | 1.0.2 | R8-Verkleinerung |
+| 4 | 1.1.0 | Genre, Filter und Sortierung, Sprungleiste auf dem Telefon, Randblitz |
 
 > [!IMPORTANT]
 > `compileSdk` steht auf 37 und muss dort bleiben, weil eine eingebundene
@@ -152,6 +156,65 @@ Ergibt die Reihenfolge: *Albert Frey – Groß und wunderbar*, *Alles tanzt*,
 
 Sortiert wird sprachbewusst (`Collator` für Deutsch), damit Umlaute richtig einsortiert
 werden: „Über" gehört zu „U", nicht hinter „Z".
+
+### Filtern und Sortieren der Songliste
+
+Über der Liste sitzt eine einzeilige, waagerecht scrollbare Leiste. Sie trägt drei
+Bedienelemente:
+
+| Element | Form | Warum diese Form |
+|---|---|---|
+| Sortierung | Menü | vier Modi, gegenseitig ausschließend – als Chips würden drei davon nur Platz kosten |
+| Setlist-Filter | Menü | Setlist-Titel sind lang und würden die Genre-Chips vom Bildschirm drängen |
+| Genre-Filter | Chips | wenige, kurze Werte – ein Tipp statt zwei |
+
+Die vier Sortiermodi:
+
+| Modus | Ordnung |
+|---|---|
+| **Künstler** (Standard) | Künstler, dann Titel |
+| **Titel** | nur Titel – für Lieder, die man über die erste Zeile kennt, nicht über den Komponisten |
+| **Genre** | nach Genre gruppiert, mit Zwischenüberschriften, innerhalb alphabetisch |
+| **Reihenfolge** | die Spielfolge der gewählten Setlist |
+
+Beide Filter sind **einfach-, nicht mehrfachauswahl**. Drei Genres zu kombinieren ist
+eine Katalogisierungsaufgabe, keine musikalische; die dafür nötigen dreistufigen Chips
+sind im Vorbeigehen nicht ablesbar.
+
+> [!NOTE]
+> Filter und Sortierung sind **Ansichtszustand, keine Daten**. Sie überleben das Drehen
+> des Geräts (`rememberSaveable`), werden aber nicht gespeichert. Die App öffnet also
+> immer auf der vollständigen Liste – ein vergessener Filter, der beim nächsten Start
+> die halbe Sammlung verbirgt, wäre während einer Probe schwer zu durchschauen.
+
+### Zusammenspiel von Filter und Sortierung
+
+Drei Kopplungen, die stillschweigend das Richtige tun:
+
+*   **Setlist gewählt → Sortierung springt auf „Reihenfolge".** Wer eine Setlist filtert,
+    will sie fast immer in ihrer Spielfolge sehen.
+*   **Setlist entfernt → Sortierung fällt auf „Künstler" zurück**, falls sie auf
+    „Reihenfolge" stand. Die Ordnung, auf die sie sich bezog, gibt es dann nicht mehr.
+*   **„Reihenfolge" erscheint nur bei aktivem Setlist-Filter** im Menü. Ohne Setlist gibt
+    es keine Reihenfolge, der man folgen könnte.
+
+Im Modus „Reihenfolge" führt die Positionsnummer die Zeile an – so werden Lieder in der
+Probe benannt („wir machen die Vier").
+
+> [!IMPORTANT]
+> Ein über den Setlist-Filter geöffnetes Lied bekommt die Setlist-Kennung mit. Sonst
+> würden Pedal-Weiterblättern und Sprungleiste fehlen, obwohl sichtbar eine Setlist
+> gefiltert ist – die Liste würde einen Kontext anzeigen, den die Notenansicht nicht
+> kennt.
+
+Ein Filter kann das überleben, worauf er zeigt: eine gelöschte Setlist, ein Genre, das
+auf seinem letzten Lied umbenannt wurde. Beide Filter werden deshalb bei jeder Anzeige
+gegen die vorhandenen Werte geprüft und stillschweigend verworfen, wenn ihr Ziel weg ist
+– andernfalls stünde man vor einer leeren Liste ohne erkennbaren Ausweg.
+
+Die leere Liste unterscheidet zwei Fälle, weil sie verschiedene Handlungen verlangen:
+„Noch keine Lieder vorhanden." (importieren) gegenüber „Keine Lieder passen zum Filter."
+(Filter lösen).
 
 ### Sortierung der Setlists
 
@@ -212,25 +275,69 @@ weiterrutscht und es erst beim Anspielen merkt.
 
 ### Sprungleiste in der Notenansicht
 
-Wurde das Lied aus einer Setlist geöffnet, erscheint rechts am Bildschirmrand eine
-schmale senkrechte Leiste mit **Vorschaubildern aller Lieder der Setlist** – jeweils
-die erste Notenseite, stark verkleinert. Ein Tipp öffnet das betreffende Lied.
+Wurde das Lied aus einer Setlist geöffnet, erscheint eine Leiste mit den
+**Positionsnummern aller Lieder der Setlist**. Ein Tipp öffnet das betreffende Lied,
+immer auf Seite 1.
 
 Zweck: In einem Gottesdienst wird die Reihenfolge oft spontan geändert oder ein Lied
 übersprungen. Ohne Sprungleiste heißt das: zurück zur Setlist, suchen, öffnen.
 
+Die Leiste wechselt mit der Fensterbreite die Position, weil sie sich den Platz mit der
+Navigation teilt:
+
+| Fensterbreite | Navigation | Sprungleiste |
+|---|---|---|
+| kompakt (Telefon) | Leiste unten | waagerecht am oberen Rand der Notenansicht |
+| mittel / groß (Tablet) | Rail seitlich | senkrecht unten in der Rail |
+
 Eigenschaften:
 
-*   Das aktuelle Lied ist hervorgehoben.
-*   Wird mit den übrigen Bedienleisten ein- und ausgeblendet (Tipp in die Bildmitte),
-    stört also beim Spielen nicht.
-*   Lieder ohne Notenblatt (Typ *Text*) zeigen ein Ersatzsymbol.
-*   Vorschaubilder werden verkleinert gerendert und zwischengespeichert.
+*   Das aktuelle Lied ist hervorgehoben (gedecktes Grün, weiße Schrift, fett).
+*   Die Leiste scrollt die aktuelle Position automatisch in den sichtbaren Bereich,
+    damit auch lange Setlists bedienbar bleiben.
+*   In der waagerechten Fassung trägt die aktuelle Kachel zusätzlich die Zählung
+    („4/12"), weil dort weniger Nachbarn gleichzeitig sichtbar sind.
+*   Bei weniger als zwei Liedern entfällt die Leiste.
+
+> [!NOTE]
+> Ursprünglich waren **Vorschaubilder** der ersten Notenseite geplant. Verworfen, weil
+> eine auf 120 px verkleinerte Chornote nicht wiedererkennbar ist – man sieht graue
+> Streifen, keine Melodie. Die Positionsnummer trifft, wie Lieder in der Probe
+> tatsächlich benannt werden („wir machen die Vier vor der Sechs"), und kostet weder
+> Speicher noch Rechenzeit.
+
+### Erkennbarkeit des aktuellen Liedes
+
+Während des Spielens muss ohne Nachdenken ablesbar sein, in welchem Lied man sich
+befindet. Dafür gibt es zwei unabhängige Anzeigen, damit keine Bildschirmgröße und
+keine Ausrichtung ohne Hinweis bleibt:
+
+1.  Die hervorgehobene Kachel der Sprungleiste.
+2.  Die Kopfzeile, die bei Liedern aus einer Setlist die Position voranstellt:
+    „4/12 · Großer Gott, wir loben dich".
+
+> [!IMPORTANT]
+> Beide Anzeigen verschwinden beim Ausblenden der Bedienoberfläche – gewollt, weil dann
+> die ganze Fläche den Noten gehört. Die Zuordnung ist mit einem Tipp in die Bildmitte
+> jederzeit wieder da.
+
+### Startseite beim Öffnen
+
+Beim Öffnen eines Liedes gibt es zwei berechtigte Erwartungen, die sich widersprechen.
+Deshalb entscheidet der Weg, über den das Lied geöffnet wurde:
+
+| Geöffnet über | Startseite | Begründung |
+|---|---|---|
+| Songliste | zuletzt gelesene Seite | Üben: man macht dort weiter, wo man aufgehört hat |
+| Setlist | **Seite 1** | Auftritt: das Lied wird von vorne angestimmt |
+| Sprungleiste | Seite 1 | wie Setlist |
+| Vorblättern aus dem Vorgänger | Seite 1 | der Durchlauf folgt der Partitur |
+| Zurückblättern aus dem Nachfolger | letzte Seite | man blättert dorthin, wo man hinsieht |
 
 > [!WARNING]
-> Vorschaubilder kosten Speicher und Rechenzeit. Bei langen Setlists werden sie
-> daher nur für die gerade sichtbaren Einträge erzeugt und in stark reduzierter
-> Auflösung gehalten (Breite rund 120 px).
+> Das Merken der letzten Seite ist beim Auftritt keine Hilfe, sondern eine Falle: Nach
+> einer Probe, in der das Lied auf Seite 2 endete, stünde beim Gottesdienst die falsche
+> Seite auf dem Pult – und der Fehler fällt erst beim Einsatz auf.
 
 ---
 
@@ -257,10 +364,32 @@ Noten zu nehmen.
 
 ### Optische Rückmeldung
 
-Beim Blättern läuft ein kurzer grüner Schleier über den Bildschirm (50 ms Anstieg,
-500 ms Ausklang). Das bestätigt den Pedaltritt auch dann, wenn zwei Seiten ähnlich
-aussehen – ohne diese Rückmeldung tritt man im Zweifel ein zweites Mal und ist zwei
-Seiten zu weit.
+Jeder Seitenwechsel wird optisch bestätigt (50 ms Anstieg, 500 ms Ausklang). Das ist
+nötig, weil zwei Notenseiten einander sehr ähnlich sehen – ohne Rückmeldung tritt man
+im Zweifel ein zweites Mal und ist zwei Seiten zu weit.
+
+Die Rückmeldung besteht aus zwei Teilen, die sich ergänzen:
+
+| Teil | Wo | Wirksam bei |
+|---|---|---|
+| **Randblitz** | 6 dp breiter grüner Rahmen um die Notenfläche | immer |
+| Kachelblitz | aktuelle Position der Sprungleiste hellt auf | nur bei Setlists |
+
+> [!IMPORTANT]
+> Der Randblitz ist der verlässliche Teil: Er hängt nicht an einer Setlist und bleibt
+> auch bei ausgeblendeter Bedienoberfläche sichtbar. Beim Üben eines einzelnen Liedes
+> aus der Songliste ist er die einzige Rückmeldung – die Sprungleiste existiert dort
+> nicht.
+
+> [!NOTE]
+> Zuerst war es ein grüner Schleier über den **ganzen** Bildschirm. Verworfen, weil er
+> die Noten genau in dem Moment überlagerte, in dem sie gebraucht werden. Die Breite von
+> 6 dp ist der Kompromiss: im peripheren Blickfeld erkennbar, ohne je eine Notenzeile zu
+> verdecken. Beide Blitze nutzen denselben Grünton (`#7BA07E`), damit sie als ein
+> Signal gelesen werden und nicht als zwei Ereignisse.
+
+Der Liedwechsel ist der größere Sprung und wird deshalb zusätzlich benannt – der Titel
+des neuen Liedes erscheint für 1,5 Sekunden in der Bildmitte.
 
 ---
 
@@ -278,6 +407,7 @@ data class Song(
     val version: String = "",        // z. B. "Akustik", "Chor"
     val fileUri: String,             // leer bei SongSource.TEXT
     val sourceType: SongSource = SongSource.PDF,
+    val genre: String = "",          // frei, z. B. "Gospel", "Advent"
     val bpm: Int = 120,              // derzeit ungenutzt
     val timeSignature: String = "4/4",  // derzeit ungenutzt
     val totalBars: Int = 0,          // derzeit ungenutzt
@@ -309,6 +439,41 @@ Format `yyyy-MM-dd` geschrieben. Gründe für diese Wahl statt eines Zeitstempel
 
 Angezeigt wird weiterhin deutsch (`TT.MM.JJJJ`); die Umwandlung passiert nur in der
 Oberfläche.
+
+### Genre
+
+`genre` ist **freier Text**, keine Aufzählung. Zwei Gründe:
+
+1.  Die hier nützlichen Kategorien sind zur Hälfte **Anlässe** („Advent", „Taufe",
+    „Trauung") und nicht musikalische Stile. Eine feste Liste würde diese Mischung nie
+    vollständig treffen.
+2.  Jede neue Kategorie bräuchte sonst eine Code-Änderung und ein Play-Release – für
+    eine Eingabe, die eine Sekunde dauert.
+
+Freier Text hat einen Haken: „Gospel" und „gospel" spalten eine Kategorie still in zwei.
+Der Filter findet dann nie beide, während die Liste korrekt aussieht. Zwei Maßnahmen
+dagegen:
+
+*   Unter dem Eingabefeld stehen die **bereits vergebenen Genres als Chips**. Ein Tipp
+    übernimmt die vorhandene Schreibweise – Wiederverwenden ist damit weniger Arbeit als
+    Neutippen. Ein Tipp auf den aktiven Chip leert das Feld wieder, ohne Tastatur.
+*   Eingaben werden mit `trim()` bereinigt, damit ein versehentliches Leerzeichen keine
+    zweite, optisch identische Kategorie erzeugt.
+
+Das Genre ist an allen drei Eingabestellen verfügbar: Import, manuelles Anlegen und
+Bearbeiten-Dialog. In der Liste steht es als gedämpfte zweite Zeile – sichtbar beim
+Suchen nach „irgendwas für Advent", ohne dem Titel Aufmerksamkeit zu nehmen. Beim
+Gruppieren nach Genre entfällt es dort, weil die Zwischenüberschrift es schon sagt.
+
+> [!NOTE]
+> Wie alle Felder mit Standardwert ist `genre` rückwärtskompatibel: Bestehende
+> `songs.json` ohne dieses Feld bleiben lesbar, eine Migration entfällt.
+
+---
+
+## 5a. Eigene Kompositionen
+
+BISHER_PLATZHALTER
 
 ---
 
@@ -417,10 +582,12 @@ app/src/main/
         ├── components/
         │   ├── PdfView.kt         Rendering, Cache, Vorausladen
         │   ├── MusicXmlView.kt    WebView-Brücke zu OSMD
-        │   ├── SetlistStrip.kt    Sprungleiste mit Vorschaubildern
+        │   ├── SetlistStrip.kt    Sprungleiste, senkrecht und waagerecht
+        │   ├── SongFilterBar.kt   Filter- und Sortierleiste
+        │   ├── GenreChips.kt      Vorschläge vergebener Genres
         │   └── DateField.kt       Datumsauswahl
         ├── util/
-        │   ├── SortUtils.kt       Collator-Sortierung
+        │   ├── SortUtils.kt       Collator-Sortierung, Sortiermodi
         │   └── DateUtils.kt       Datum deuten und anzeigen
         └── screens/
             ├── SongListScreen.kt
@@ -465,6 +632,25 @@ R8-Fehler treten grundsätzlich nur im Release-Build auf, deshalb separat geprü
 
 Der letzte Punkt ist der wichtigste: Er belegt, dass die Keep-Rules greifen und
 bestehende Datenbestände nach dem Umstieg auf R8 lesbar bleiben.
+
+### Stand von Version 1.1.0 (`versionCode` 4)
+
+| Was | Wie geprüft | Ergebnis |
+|---|---|---|
+| Übersetzen | `:app:assembleDebug` | erfolgreich |
+| Release-Bundle | `:app:bundleRelease` | erfolgreich, 5,24 MB |
+| Genre überlebt R8 | `mapping.txt` | `getGenre() -> getGenre`, unverändert |
+
+> [!WARNING]
+> **Die Oberfläche von 1.1.0 ist noch nicht auf einem Gerät gesehen.** Übersetzen und
+> Mapping belegen nur, dass der Code baut und die Serialisierung hält. Offen sind
+> insbesondere:
+>
+> *   die waagerechte Sprungleiste in beiden Ausrichtungen – sie liegt innerhalb der
+>     Tipp-Zone zum Blättern, die Abgrenzung ist nur theoretisch geprüft;
+> *   der Randblitz bei 6 dp Breite – ob er im peripheren Blickfeld wirklich auffällt,
+>     lässt sich nur am Gerät beurteilen;
+> *   die Filterleiste auf schmalem Bildschirm, wenn viele Genres vergeben sind.
 
 > [!WARNING]
 > **Nicht auf echter Hardware geprüft:** Das Bluetooth-Pedal lässt sich im Emulator
