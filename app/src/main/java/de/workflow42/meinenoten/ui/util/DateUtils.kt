@@ -64,13 +64,15 @@ fun formatSetlistDate(raw: String): String =
  * the list useful.
  */
 fun List<Setlist>.sortedForDisplay(): List<Setlist> {
+    // The "convert to Sequence" hint does not apply here: a setlist collection is a
+    // handful of entries, where the sequence machinery costs more than it saves.
     val (dated, undated) = map { it to parseSetlistDate(it.date) }
         .partition { it.second != null }
 
     val newestFirst = dated
         .sortedWith(
             compareByDescending<Pair<Setlist, LocalDate?>> { it.second }
-                .thenBy(germanCollator) { it.first.title }
+                .thenBy(germanCollator) { it.first.title },
         )
         .map { it.first }
 

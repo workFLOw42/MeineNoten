@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -23,6 +22,7 @@ import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
 import de.workflow42.meinenoten.ui.components.SongFilterBar
+import de.workflow42.meinenoten.ui.components.SongOverflowMenu
 import de.workflow42.meinenoten.ui.util.SongSortMode
 import de.workflow42.meinenoten.ui.util.groupHeading
 import de.workflow42.meinenoten.ui.util.sortedBySetlistOrder
@@ -36,9 +36,13 @@ fun SongListScreen(
     onImportPdf: () -> Unit,
     onAddManual: () -> Unit,
     onAddToSetlist: (Song) -> Unit,
+    /** Opens the shared metadata editor for a song. */
+    onEditSong: (Song) -> Unit,
+    /** Asks for confirmation before deleting; the caller owns the actual removal. */
+    onDeleteSong: (Song) -> Unit,
     modifier: Modifier = Modifier,
     /** Offered as a filter, so a service can be prepared without leaving this screen. */
-    setlists: List<Setlist> = emptyList()
+    setlists: List<Setlist> = emptyList(),
 ) {
     // Filter and sort state is view state, not data: it survives rotation but is
     // deliberately not persisted, so the app always opens on the full library.
@@ -46,8 +50,16 @@ fun SongListScreen(
     var selectedSetlistId by rememberSaveable { mutableStateOf<String?>(null) }
     var sortMode by rememberSaveable { mutableStateOf(SongSortMode.ARTIST) }
 
-    val genres = remember(songs) {
-        songs.map { it.genre }.filter { it.isNotBlank() }.distinct().sorted()
+    // Keyed on a snapshot of the contents, not on `songs` itself: the caller passes a
+    // SnapshotStateList whose identity never changes, so keying on the instance would
+    // never recompute these. Songs are loaded asynchronously after the first frame,
+    // which used to leave the list stuck on its initial empty state until a tab switch
+    // disposed the screen.
+    val songList = songs.toList()
+
+    val genres = remember(songList) {
+        songList.asSequence().map { it.genre }.filter { it.isNotBlank() }.distinct().sorted()
+            .toList()
     }
 
     // A filter can outlive the thing it points at – a deleted setlist or a genre that was
@@ -55,9 +67,9 @@ fun SongListScreen(
     val activeSetlist = setlists.find { it.id == selectedSetlistId }
     val activeGenre = selectedGenre?.takeIf { genres.contains(it) }
 
-    val visibleSongs = remember(songs, activeGenre, activeSetlist, sortMode) {
-        val filtered = songs
-            .filter { activeGenre == null || it.genre.equals(activeGenre, ignoreCase = true) }
+    val visibleSongs = remember(songList, activeGenre, activeSetlist, sortMode) {
+        val filtered = songList
+            .filter { activeGenre == null || (it.genre.equals(activeGenre, ignoreCase = true)) }
             .filter { activeSetlist == null || activeSetlist.songIds.contains(it.id) }
 
         if (sortMode == SongSortMode.SETLIST_ORDER && activeSetlist != null) {
@@ -112,7 +124,7 @@ fun SongListScreen(
                     Text(
                         // Distinguishing the two cases matters: an empty library needs an
                         // import, an empty filter result needs the filter cleared.
-                        text = if (songs.isEmpty()) {
+                        text = if (songList.isEmpty()) {
                             "Noch keine Lieder vorhanden."
                         } else {
                             "Keine Lieder passen zum Filter."
@@ -198,12 +210,15 @@ fun SongListScreen(
                                 }
                             },
                         trailingContent = {
-                            IconButton(onClick = { onAddToSetlist(song) }) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.PlaylistAdd,
-                                    contentDescription = "Add to Setlist"
-                                )
-                            }
+                            // One overflow menu instead of a single visible action: the
+                            // list offers the same three song actions as the detail
+                            // screen, and a destructive one among them must not sit
+                            // exposed next to a row that is tapped to open a song.
+                            SongOverflowMenu(
+                                onEdit = { onEditSong(song) },
+                                onAddToSetlist = { onAddToSetlist(song) },
+                                onDelete = { onDeleteSong(song) },
+                            )
                         },
                         modifier = Modifier
                             .fillMaxWidth()

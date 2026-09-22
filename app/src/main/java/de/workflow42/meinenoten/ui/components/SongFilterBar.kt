@@ -50,7 +50,7 @@ fun SongFilterBar(
     onGenreSelected: (String?) -> Unit,
     onSetlistSelected: (String?) -> Unit,
     onSortModeSelected: (SongSortMode) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     // Nothing to filter by yet – a row of empty controls would only take up space.
     if (genres.isEmpty() && setlists.isEmpty()) return
@@ -60,7 +60,7 @@ fun SongFilterBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(
                 horizontal = 16.dp,
-                vertical = 8.dp
+                vertical = 8.dp,
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -109,12 +109,12 @@ private fun SortMenuChip(
     setlistFilterActive: Boolean,
     onSortModeSelected: (SongSortMode) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(value = false) }
 
     // Following a running order is meaningless without a setlist to take it from.
     val available = remember(setlistFilterActive) {
         SongSortMode.entries.filter {
-            it != SongSortMode.SETLIST_ORDER || setlistFilterActive
+            (it != SongSortMode.SETLIST_ORDER) || setlistFilterActive
         }
     }
 
@@ -152,7 +152,7 @@ private fun SetlistMenuChip(
     selectedSetlistId: String?,
     onSetlistSelected: (String?) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(value = false) }
     val selected = setlists.find { it.id == selectedSetlistId }
 
     Row(verticalAlignment = Alignment.CenterVertically) {

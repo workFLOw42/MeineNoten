@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
-import android.net.Uri
 import android.os.ParcelFileDescriptor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -21,6 +20,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.createBitmap
+import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -50,10 +51,10 @@ private object GlobalPdfCache {
         val targetRemove = allEntries.size - MAX_TOTAL_BITMAPS
         
         val iterator = caches.iterator()
-        while (iterator.hasNext() && removed < targetRemove) {
+        while (iterator.hasNext() && (removed < targetRemove)) {
             val entry = iterator.next()
             val pageIterator = entry.value.iterator()
-            while (pageIterator.hasNext() && removed < targetRemove) {
+            while (pageIterator.hasNext() && (removed < targetRemove)) {
                 val pageEntry = pageIterator.next()
                 pageEntry.value.recycle()
                 pageIterator.remove()
@@ -77,7 +78,7 @@ fun PdfView(
     fileUri: String,
     currentPage: Int,
     modifier: Modifier = Modifier,
-    onPageCountReady: (Int) -> Unit = {}
+    onPageCountReady: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current
     var visible by remember(fileUri, currentPage) { 
@@ -142,7 +143,7 @@ fun PdfView(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = "Seite ${currentPage + 1}",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         }
 
@@ -162,7 +163,7 @@ fun PdfView(
 }
 
 private fun openRenderer(context: Context, fileUri: String): ParcelFileDescriptor {
-    val uri = Uri.parse(fileUri)
+    val uri = fileUri.toUri()
     return if (uri.scheme == "content") {
         context.contentResolver.openFileDescriptor(uri, "r")
             ?: throw IllegalStateException("Datei konnte nicht geöffnet werden")
@@ -177,9 +178,8 @@ private fun openRenderer(context: Context, fileUri: String): ParcelFileDescripto
 private fun PdfRenderer.renderPage(index: Int, targetWidth: Int): Bitmap =
     openPage(index).use { page ->
         val scale = targetWidth.toFloat() / page.width
-        val width = targetWidth
         val height = (page.height * scale).toInt().coerceAtLeast(1)
-        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+        createBitmap(targetWidth, height).also { bitmap ->
             bitmap.eraseColor(Color.WHITE)
             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
         }
@@ -209,7 +209,7 @@ fun PdfPreloader(fileUri: String) {
                         }
                     }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Preload failure is silent
             }
         }

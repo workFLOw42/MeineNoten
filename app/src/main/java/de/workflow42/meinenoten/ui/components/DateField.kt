@@ -28,9 +28,9 @@ fun DateField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    label: String = "Datum (Termin)"
+    label: String = "Datum (Termin)",
 ) {
-    var showPicker by remember { mutableStateOf(false) }
+    var showPicker by remember { mutableStateOf(value = false) }
     val parsed = remember(value) { parseSetlistDate(value) }
 
     if (showPicker) {
@@ -43,15 +43,17 @@ fun DateField(
         DatePickerDialog(
             onDismissRequest = { showPicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let { millis ->
-                        val picked = Instant.ofEpochMilli(millis)
-                            .atZone(ZoneOffset.UTC)
-                            .toLocalDate()
-                        onValueChange(picked.toStorageString())
+                TextButton(
+                    onClick = {
+                        state.selectedDateMillis?.let { millis ->
+                            val picked = Instant.ofEpochMilli(millis)
+                                .atZone(ZoneOffset.UTC)
+                                .toLocalDate()
+                            onValueChange(picked.toStorageString())
+                        }
+                        showPicker = false
                     }
-                    showPicker = false
-                }) {
+                ) {
                     Text("OK")
                 }
             },

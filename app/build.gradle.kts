@@ -7,6 +7,21 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+/**
+ * Version of the build being produced, held in `version.properties`.
+ *
+ * Kept in a file rather than hard-coded here so it can be bumped automatically after a
+ * release build (see the `bumpVersion` task) without rewriting the build script.
+ */
+val versionPropsFile = file("version.properties")
+val versionProps = Properties().apply {
+    if (versionPropsFile.exists()) {
+        versionPropsFile.inputStream().use { load(it) }
+    }
+}
+val currentVersionCode = versionProps.getProperty("versionCode")?.toIntOrNull() ?: 1
+val currentVersionName = versionProps.getProperty("versionName") ?: "1.0.0"
+
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_11)
@@ -21,8 +36,8 @@ android {
         applicationId = "de.workflow42.meinenoten"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.1.0"
+        versionCode = currentVersionCode
+        versionName = currentVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -57,6 +72,59 @@ android {
     buildFeatures {
         compose = true
     }
+}
+
+/**
+ * Writes the next version into `version.properties` after a release bundle was built.
+ *
+ * Bumping *after* the build rather than before it keeps the number that was actually
+ * shipped visible in the file until the next release, and means a failed build does not
+ * burn a versionCode.
+ *
+ * Only the resulting strings are captured – no project or task references – so this stays
+ * compatible with the configuration cache enabled in gradle.properties.
+ */
+val bumpVersion = tasks.register("bumpVersion") {
+    group = "versioning"
+    description = "Raises versionCode and the patch level in version.properties."
+    val propsFile = versionPropsFile
+    val nextCode = currentVersionCode + 1
+    // Patch-level bump: a release that changes more than that deserves a deliberate
+    // versionName, so only the last segment moves on its own.
+    val nextName = currentVersionName.split(".").let { parts ->
+        if (parts.size == 3) {
+            val patch = parts[2].toIntOrNull()
+            if (patch != null) "${parts[0]}.${parts[1]}.${patch + 1}" else currentVersionName
+        } else {
+            currentVersionName
+        }
+    }
+    val builtCode = currentVersionCode
+    val builtName = currentVersionName
+
+    doLast {
+        propsFile.writeText(
+            """
+            # Version of the *next* build.
+            #
+            # Read during configuration and bumped automatically after a successful
+            # :app:bundleRelease, so no two uploads can ever carry the same versionCode.
+            #
+            # Belongs in version control: the whole point is that the number cannot repeat
+            # across machines or checkouts.
+            #
+            # Last built and signed: versionCode $builtCode / $builtName
+            versionCode=$nextCode
+            versionName=$nextName
+            """.trimIndent() + "\n"
+        )
+        logger.lifecycle("Built $builtCode / $builtName – next build will be $nextCode / $nextName")
+    }
+}
+
+// Only release bundles bump: debug builds and APKs must not consume upload numbers.
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    finalizedBy(bumpVersion)
 }
 
 dependencies {

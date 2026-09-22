@@ -44,7 +44,7 @@ fun List<Song>.sortedForDisplay(mode: SongSortMode = SongSortMode.ARTIST): List<
     when (mode) {
         SongSortMode.ARTIST -> sortedWith(
             compareBy<Song, String>(germanCollator) { it.sortKey }
-                .thenBy(germanCollator) { it.title }
+                .thenBy(germanCollator) { it.title },
         )
 
         SongSortMode.TITLE -> sortedWith(compareBy(germanCollator) { it.title })
@@ -68,7 +68,7 @@ fun List<Song>.sortedForDisplay(mode: SongSortMode = SongSortMode.ARTIST): List<
  * reachable with a setlist filter active, where anything outside it is noise.
  */
 fun List<Song>.sortedBySetlistOrder(songIds: List<String>): List<Song> {
-    val positions = songIds.withIndex().associate { (index, id) -> id to index }
+    val positions = songIds.withIndex().associateBy({ it.value }, { it.index })
     return filter { positions.containsKey(it.id) }
         .sortedBy { positions[it.id] }
 }

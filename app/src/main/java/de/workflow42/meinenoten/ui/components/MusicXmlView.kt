@@ -1,7 +1,6 @@
 package de.workflow42.meinenoten.ui.components
 
 import android.annotation.SuppressLint
-import android.net.Uri
 import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -19,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -35,18 +35,18 @@ import java.util.zip.ZipInputStream
 fun MusicXmlView(
     fileUri: String,
     modifier: Modifier = Modifier,
-    zoom: Float = 1.0f
+    zoom: Float = 1.0f,
 ) {
     val context = LocalContext.current
     var xmlContent by remember(fileUri) { mutableStateOf<String?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var errorMessage by remember(fileUri) { mutableStateOf<String?>(null) }
-    var isRendering by remember(fileUri) { mutableStateOf(true) }
+    var isRendering by remember(fileUri) { mutableStateOf(value = true) }
 
     LaunchedEffect(fileUri) {
         withContext(Dispatchers.IO) {
             try {
-                val uri = Uri.parse(fileUri)
+                val uri = fileUri.toUri()
                 val bytes = if (uri.scheme == "content") {
                     context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 } else {
@@ -72,7 +72,7 @@ fun MusicXmlView(
         // decodeURIComponent(escape(atob(..))) restores UTF-8 characters correctly.
         view.evaluateJavascript(
             "loadMusicXML(decodeURIComponent(escape(atob('$encoded'))))",
-            null
+            null,
         )
     }
 
@@ -95,24 +95,31 @@ fun MusicXmlView(
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
 
-                    addJavascriptInterface(object {
-                        @JavascriptInterface
-                        fun onStatus(type: String, message: String) {
-                            post {
-                                when (type) {
-                                    "error" -> {
-                                        errorMessage = message
-                                        isRendering = false
+                    addJavascriptInterface(
+                        object {
+                            // Called from JavaScript in assets/osmd.html – unused from
+                            // Kotlin, which is why it must survive R8 (keep rule for
+                            // @JavascriptInterface).
+                            @Suppress("unused")
+                            @JavascriptInterface
+                            fun onStatus(type: String, message: String) {
+                                post {
+                                    when (type) {
+                                        "error" -> {
+                                            errorMessage = message
+                                            isRendering = false
+                                        }
+                                        "rendered" -> {
+                                            errorMessage = null
+                                            isRendering = false
+                                        }
+                                        "loading" -> isRendering = true
                                     }
-                                    "rendered" -> {
-                                        errorMessage = null
-                                        isRendering = false
-                                    }
-                                    "loading" -> isRendering = true
                                 }
                             }
-                        }
-                    }, "AndroidOsmd")
+                        },
+                        "AndroidOsmd"
+                    )
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView, url: String?) {
@@ -126,7 +133,7 @@ fun MusicXmlView(
             modifier = Modifier.fillMaxSize()
         )
 
-        if (isRendering && errorMessage == null) {
+        if (isRendering && (errorMessage == null)) {
             CircularProgressIndicator()
         }
 
@@ -142,7 +149,7 @@ fun MusicXmlView(
 }
 
 private fun isZip(bytes: ByteArray): Boolean =
-    bytes.size > 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte()
+    (bytes.size > 4) && (bytes[0] == 0x50.toByte()) && (bytes[1] == 0x4B.toByte())
 
 /** Extracts the score from a compressed MusicXML (.mxl) container. */
 private fun extractFromMxl(bytes: ByteArray): String {
@@ -152,7 +159,8 @@ private fun extractFromMxl(bytes: ByteArray): String {
             val name = entry.name
             val isScore = !entry.isDirectory &&
                     !name.startsWith("META-INF") &&
-                    (name.endsWith(".xml", true) || name.endsWith(".musicxml", true))
+                    (name.endsWith(".xml", ignoreCase = true) ||
+                            name.endsWith(".musicxml", ignoreCase = true))
             if (isScore) return zip.readBytes().toString(Charsets.UTF_8)
             entry = zip.nextEntry
         }

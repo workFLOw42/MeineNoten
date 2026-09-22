@@ -52,7 +52,7 @@ fun SetlistStrip(
     currentSongId: String,
     onSongClick: (Song) -> Unit,
     modifier: Modifier = Modifier,
-    flashAlpha: Float = 0f
+    flashAlpha: Float = 0f,
 ) {
     if (songs.size < 2) return
 
@@ -118,7 +118,7 @@ private fun PositionTile(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (isCurrent && flashAlpha > 0f) {
+        if (isCurrent && (flashAlpha > 0f)) {
             Box(
                 Modifier
                     .matchParentSize()

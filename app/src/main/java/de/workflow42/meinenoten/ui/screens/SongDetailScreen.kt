@@ -23,15 +23,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.automirrored.filled.Subject
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,19 +43,21 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
-import de.workflow42.meinenoten.ui.components.GenreChips
 import de.workflow42.meinenoten.ui.components.MusicXmlView
 import de.workflow42.meinenoten.ui.components.PdfView
 import de.workflow42.meinenoten.ui.components.SetlistStripHorizontal
+import de.workflow42.meinenoten.ui.components.DeleteSongDialog
+import de.workflow42.meinenoten.ui.components.EditSongDialog
+import de.workflow42.meinenoten.ui.components.SongOverflowMenu
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Page-turn cue colour. Matches the setlist strip highlight so both cues read as the
@@ -79,6 +79,12 @@ fun SongDetailScreen(
     onBackClick: () -> Unit,
     onSongUpdated: (Song) -> Unit,
     onSongDeleted: (Song) -> Unit,
+    /** Opens the "add to setlist" picker, which is owned by the host. */
+    onAddToSetlist: (Song) -> Unit,
+    /** Opens the file picker to attach or replace this song's score. */
+    onAttachFile: (Song) -> Unit,
+    /** Drops the score file, leaving a text-only song. */
+    onRemoveFile: (Song) -> Unit,
     modifier: Modifier = Modifier,
     showBackButton: Boolean = true,
     /**
@@ -92,8 +98,18 @@ fun SongDetailScreen(
     onNavigateToSong: (Song, Boolean) -> Unit = { _, _ -> },
     /** Set when arriving by paging backwards, so the song opens on its final page. */
     openAtEnd: Boolean = false,
-    /** If true, resumes at [Song.lastPage]; if false, starts at page 1. */
-    resumeLastPage: Boolean = true,
+    /** Zero-based page to open on. Ignored when [openAtEnd] is set. */
+    startPage: Int = 0,
+    /**
+     * Reports the current position (song id and zero-based page) so the setlist being
+     * played can be resumed there. Not called when opened outside a setlist.
+     */
+    onProgress: (String, Int) -> Unit = { _, _ -> },
+    /**
+     * Reports that the end of the setlist has been reached, so its stored position can
+     * be cleared and the programme starts from the top next time.
+     */
+    onFinished: () -> Unit = {},
     /**
      * True on compact widths, where the navigation rail (and with it the vertical
      * [SetlistStripHorizontal] counterpart) is not shown. The screen then hosts its own
@@ -101,23 +117,19 @@ fun SongDetailScreen(
      */
     showSetlistStrip: Boolean = false,
     /** Called when a page turn occurs (for UI cues). */
-    onPageTurn: () -> Unit = {}
+    onPageTurn: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    // Start on the page the user last viewed, unless we paged in from the next song.
+    // Start where the caller asked: a page carried over from a setlist's saved
+    // position, or 0 when the song was opened from the library. -1 means "resolve to
+    // the last page once the page count is known".
     var currentPage by remember(song.id) {
-        mutableIntStateOf(
-            when {
-                openAtEnd -> -1
-                resumeLastPage -> song.lastPage
-                else -> 0
-            }
-        )
+        mutableIntStateOf(if (openAtEnd) -1 else startPage)
     }
     var pageCount by remember(song.id) { mutableIntStateOf(0) }
-    var isUiVisible by remember { mutableStateOf(true) }
+    var isUiVisible by remember { mutableStateOf(value = true) }
     val focusRequester = remember { FocusRequester() }
 
     val flashAlpha = remember { Animatable(0f) }
@@ -131,6 +143,11 @@ fun SongDetailScreen(
 
     val isPagedDocument = song.sourceType == SongSource.PDF
 
+    // A song can hold a score *and* its typed text. The text view is the only option
+    // when there is no file, and an opt-in toggle once one has been attached.
+    var showLyrics by remember(song.id) { mutableStateOf(!song.hasFile) }
+    val lyricsVisible = showLyrics || !song.hasFile
+
     // Position within the setlist, or -1 when opened from the song list.
     val setlistIndex = remember(song.id, setlistSongs) {
         setlistSongs.indexOfFirst { it.id == song.id }
@@ -143,7 +160,7 @@ fun SongDetailScreen(
     var songChangeLabel by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(songChangeLabel) {
         if (songChangeLabel != null) {
-            delay(1500)
+            delay(1.5.seconds)
             songChangeLabel = null
         }
     }
@@ -162,10 +179,28 @@ fun SongDetailScreen(
         }
     }
 
-    // Remember the current page so reopening the song resumes where it was left.
-    LaunchedEffect(song.id, currentPage) {
-        if (isPagedDocument && currentPage >= 0 && currentPage != song.lastPage) {
-            onSongUpdated(song.copy(lastPage = currentPage))
+    // Report the position back to the setlist that is being played, so it can be resumed
+    // there. Deliberately *not* stored on the song: the same song can sit in several
+    // programmes, and looking it up in the library must not move a service's position.
+    //
+    // Reaching the final page of the final song reports "finished" instead. Only this
+    // screen can tell: the setlist screen has no way to know a PDF's page count.
+    LaunchedEffect(song.id, currentPage, pageCount, setlistIndex) {
+        if (currentPage < 0) return@LaunchedEffect
+
+        val isLastSong = (setlistIndex >= 0) && (setlistIndex == setlistSongs.lastIndex)
+        val atLastPage = if (isPagedDocument) {
+            (pageCount > 0) && (currentPage >= pageCount - 1)
+        } else {
+            // Text and MusicXML are one continuous view, so being there is being at
+            // its end.
+            true
+        }
+
+        if (isLastSong && atLastPage) {
+            onFinished()
+        } else {
+            onProgress(song.id, currentPage)
         }
     }
 
@@ -174,7 +209,7 @@ fun SongDetailScreen(
         // otherwise it would skip straight into the following song.
         if (currentPage < 0) return
 
-        if (isPagedDocument && currentPage < pageCount - 1) {
+        if (isPagedDocument && (currentPage < pageCount - 1)) {
             currentPage++
             scope.launch { triggerFlash() }
         } else if (nextSong != null) {
@@ -197,23 +232,11 @@ fun SongDetailScreen(
         }
     }
     
-    var showEditDialog by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var editTitle by remember(song) { mutableStateOf(song.title) }
-    var editArtist by remember(song) { mutableStateOf(song.artist) }
-    var editVersion by remember(song) { mutableStateOf(song.version) }
-    var editGenre by remember(song) { mutableStateOf(song.genre) }
-    var editBpm by remember(song) { mutableStateOf(song.bpm.toString()) }
-    var editTimeSignature by remember(song) { mutableStateOf(song.timeSignature) }
-    var editTotalBars by remember(song) { mutableStateOf(song.totalBars.toString()) }
-    var editNotes by remember(song) { mutableStateOf(song.notes) }
-    
-    val songSetlists = remember(song.id, allSetlists) {
-        allSetlists.filter { it.songIds.contains(song.id) }
-    }
+    var showEditDialog by remember { mutableStateOf(value = false) }
+    var showDeleteConfirm by remember { mutableStateOf(value = false) }
 
-    val genreSuggestions = remember(knownGenres) {
-        knownGenres.filter { it.isNotBlank() }.distinct().sorted()
+    val songSetlists = remember(song.id, allSetlists.toList()) {
+        allSetlists.filter { it.songIds.contains(song.id) }
     }
 
     // Display Always On logic
@@ -228,182 +251,32 @@ fun SongDetailScreen(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            icon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
-            title = { Text("Lied löschen?") },
-            text = {
-                Column {
-                    Text("„${song.displayTitle}“ wird dauerhaft entfernt.")
-                    if (songSetlists.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Das Lied wird auch aus diesen Setlisten entfernt:",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        songSetlists.forEach { setlist ->
-                            Text(
-                                text = "• ${setlist.title}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                    }
-                }
+        DeleteSongDialog(
+            song = song,
+            affectedSetlists = songSetlists,
+            onConfirm = {
+                showDeleteConfirm = false
+                showEditDialog = false
+                onSongDeleted(song)
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showDeleteConfirm = false
-                        showEditDialog = false
-                        onSongDeleted(song)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
-                    )
-                ) {
-                    Text("Löschen")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Abbrechen")
-                }
-            }
+            onDismiss = { showDeleteConfirm = false },
         )
     }
 
     if (showEditDialog) {
-        AlertDialog(
-            onDismissRequest = { showEditDialog = false },
-            title = { Text("Edit Metadata") },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .fillMaxWidth()
-                ) {
-                    TextField(
-                        value = editTitle,
-                        onValueChange = { editTitle = it },
-                        label = { Text("Title") },
-                        modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()
-                    )
-                    TextField(
-                        value = editArtist,
-                        onValueChange = { editArtist = it },
-                        label = { Text("Artist") },
-                        modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()
-                    )
-                    TextField(
-                        value = editVersion,
-                        onValueChange = { editVersion = it },
-                        label = { Text("Version") },
-                        modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()
-                    )
-                    TextField(
-                        value = editGenre,
-                        onValueChange = { editGenre = it },
-                        label = { Text("Genre") },
-                        singleLine = true,
-                        modifier = Modifier.padding(bottom = 4.dp).fillMaxWidth()
-                    )
-                    GenreChips(
-                        suggestions = genreSuggestions,
-                        selected = editGenre,
-                        onSelect = { editGenre = it },
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    TextField(
-                        value = editBpm,
-                        onValueChange = { editBpm = it },
-                        label = { Text("BPM") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()
-                    )
-                    TextField(
-                        value = editTimeSignature,
-                        onValueChange = { editTimeSignature = it },
-                        label = { Text("Time Signature") },
-                        modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()
-                    )
-                    TextField(
-                        value = editTotalBars,
-                        onValueChange = { editTotalBars = it },
-                        label = { Text("Total Bars") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()
-                    )
-                    TextField(
-                        value = editNotes,
-                        onValueChange = { editNotes = it },
-                        label = { Text("Notes (e.g. Capo, Tuning)") },
-                        modifier = Modifier.padding(bottom = 16.dp).fillMaxWidth(),
-                        minLines = 3
-                    )
-                    
-                    Text(
-                        text = "Included in Setlists:",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    if (songSetlists.isEmpty()) {
-                        Text(
-                            text = "Not in any setlist yet.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    } else {
-                        songSetlists.forEach { setlist ->
-                            Text(
-                                text = "• ${setlist.title}${if (setlist.date.isNotBlank()) " (${setlist.date})" else ""}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
+        EditSongDialog(
+            song = song,
+            songSetlists = songSetlists,
+            knownGenres = knownGenres,
+            onSave = { updatedSong ->
+                onSongUpdated(updatedSong)
+                showEditDialog = false
             },
-            confirmButton = {
-                Button(onClick = {
-                    val updatedSong = song.copy(
-                        title = editTitle,
-                        artist = editArtist,
-                        version = editVersion,
-                        // Trimmed, because a stray space would create a second
-                        // category that looks identical in the list.
-                        genre = editGenre.trim(),
-                        bpm = editBpm.toIntOrNull() ?: song.bpm,
-                        timeSignature = editTimeSignature,
-                        totalBars = editTotalBars.toIntOrNull() ?: song.totalBars,
-                        notes = editNotes
-                    )
-                    onSongUpdated(updatedSong)
-                    showEditDialog = false
-                }) {
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                // Delete sits here rather than in the list, where a stray swipe while
-                // holding an instrument could trigger it by accident.
-                Row {
-                    TextButton(
-                        onClick = { showDeleteConfirm = true },
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("Löschen")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(onClick = { showEditDialog = false }) {
-                        Text("Cancel")
-                    }
-                }
-            }
+            onDismiss = { showEditDialog = false },
+            // The dialog stays open across the picker round trip, so the result is
+            // visible right where it was requested.
+            onAttachFile = { onAttachFile(song) },
+            onRemoveFile = { onRemoveFile(song) },
         )
     }
 
@@ -439,22 +312,29 @@ fun SongDetailScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { 
-                            editTitle = song.title
-                            editArtist = song.artist
-                            editVersion = song.version
-                            editGenre = song.genre
-                            editBpm = song.bpm.toString()
-                            editTimeSignature = song.timeSignature
-                            editTotalBars = song.totalBars.toString()
-                            editNotes = song.notes
-                            showEditDialog = true 
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit Metadata"
-                            )
+                        // Only meaningful when both representations exist.
+                        if (song.hasFile && song.lyrics.isNotBlank()) {
+                            IconButton(onClick = { showLyrics = !showLyrics }) {
+                                Icon(
+                                    imageVector = if (showLyrics) {
+                                        Icons.AutoMirrored.Filled.Article
+                                    } else {
+                                        Icons.AutoMirrored.Filled.Subject
+                                    },
+                                    contentDescription = if (showLyrics) {
+                                        "Noten anzeigen"
+                                    } else {
+                                        "Liedtext anzeigen"
+                                    },
+                                )
+                            }
                         }
+                        // Same three entries, same order as in the song list.
+                        SongOverflowMenu(
+                            onEdit = { showEditDialog = true },
+                            onAddToSetlist = { onAddToSetlist(song) },
+                            onDelete = { showDeleteConfirm = true },
+                        )
                         if (isPagedDocument && pageCount > 0) {
                             Text(
                                 text = "${currentPage.coerceAtLeast(0) + 1} / $pageCount",
@@ -529,7 +409,7 @@ fun SongDetailScreen(
             contentAlignment = Alignment.Center
         ) {
             when {
-                song.sourceType == SongSource.TEXT -> {
+                lyricsVisible -> {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -550,10 +430,21 @@ fun SongDetailScreen(
                             )
                         }
                         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                        Text(
-                            text = song.notes,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                        if (song.lyrics.isNotBlank()) {
+                            Text(
+                                text = song.lyrics,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        } else {
+                            // Reachable for a song that has neither file nor text yet.
+                            Text(
+                                text = "Noch kein Liedtext und keine Noten. Über die drei " +
+                                    "Punkte lässt sich eine PDF- oder MusicXML-Datei " +
+                                    "hinzufügen oder der Text eintragen.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
                     }
                 }
                 song.sourceType == SongSource.MUSIC_XML -> {
@@ -608,8 +499,9 @@ fun SongDetailScreen(
                 }
             }
 
-            // Notes Overlay (only for PDF/XML to show quick notes)
-            if (isUiVisible && song.notes.isNotBlank() && song.sourceType != SongSource.TEXT) {
+            // Notes Overlay – a memo beside the score. Pointless over the text view,
+            // which has room for everything anyway.
+            if (isUiVisible && song.notes.isNotBlank() && !lyricsVisible) {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
                     shape = MaterialTheme.shapes.medium,
