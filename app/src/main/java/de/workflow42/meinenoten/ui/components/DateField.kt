@@ -1,5 +1,6 @@
 package de.workflow42.meinenoten.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
@@ -8,6 +9,8 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.ui.util.formatSetlistDate
 import de.workflow42.meinenoten.ui.util.parseSetlistDate
 import de.workflow42.meinenoten.ui.util.toStorageString
@@ -21,6 +24,9 @@ import java.time.ZoneOffset
  * [value] is the stored representation (`yyyy-MM-dd`); [onValueChange] receives the same
  * format, or an empty string when the date is cleared. Values that predate the picker
  * and cannot be interpreted are shown verbatim so nothing the user typed is lost.
+ *
+ * The label is passed as a resource id rather than a string, because a default argument
+ * cannot call `stringResource` at the declaration site.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,7 +34,7 @@ fun DateField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    label: String = "Datum (Termin)",
+    @StringRes labelRes: Int = R.string.label_date,
 ) {
     var showPicker by remember { mutableStateOf(value = false) }
     val parsed = remember(value) { parseSetlistDate(value) }
@@ -54,12 +60,12 @@ fun DateField(
                         showPicker = false
                     }
                 ) {
-                    Text("OK")
+                    Text(stringResource(R.string.action_ok))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showPicker = false }) {
-                    Text("Abbrechen")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         ) {
@@ -71,17 +77,23 @@ fun DateField(
         value = formatSetlistDate(value),
         onValueChange = {},
         readOnly = true,
-        label = { Text(label) },
-        placeholder = { Text("Kein Termin") },
+        label = { Text(stringResource(labelRes)) },
+        placeholder = { Text(stringResource(R.string.label_date_empty)) },
         trailingIcon = {
             Row {
                 if (value.isNotBlank()) {
                     IconButton(onClick = { onValueChange("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Datum entfernen")
+                        Icon(
+                            Icons.Default.Clear,
+                            contentDescription = stringResource(R.string.cd_clear_date),
+                        )
                     }
                 }
                 IconButton(onClick = { showPicker = true }) {
-                    Icon(Icons.Default.DateRange, contentDescription = "Datum wählen")
+                    Icon(
+                        Icons.Default.DateRange,
+                        contentDescription = stringResource(R.string.cd_pick_date),
+                    )
                 }
             }
         },

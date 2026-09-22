@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
+import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
@@ -79,7 +80,7 @@ class SongRepository(private val context: Context) {
             destFile.outputStream().use { outputStream ->
                 inputStream.copyTo(outputStream)
             }
-        } ?: throw IllegalStateException("Datei konnte nicht gelesen werden")
+        } ?: throw IllegalStateException(context.getString(R.string.error_file_read_failed))
 
         return destFile
     }
@@ -115,6 +116,7 @@ class SongRepository(private val context: Context) {
             fileUri = Uri.fromFile(destFile).toString(),
             sourceType = sourceType,
             lastPage = 0,
+            pageViews = emptyMap(),
         )
     }
 
@@ -130,6 +132,7 @@ class SongRepository(private val context: Context) {
             fileUri = "",
             sourceType = SongSource.TEXT,
             lastPage = 0,
+            pageViews = emptyMap(),
         )
     }
 

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -17,16 +18,20 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
+import de.workflow42.meinenoten.ui.util.formatSetlistDate
 
 /**
  * The song actions that are offered in more than one place.
@@ -50,11 +55,11 @@ fun SongOverflowMenu(
 
     Box(modifier = modifier) {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Default.MoreVert, contentDescription = "Weitere Aktionen")
+            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_actions))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Bearbeiten") },
+                text = { Text(stringResource(R.string.action_edit)) },
                 leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                 onClick = {
                     expanded = false
@@ -62,7 +67,7 @@ fun SongOverflowMenu(
                 },
             )
             DropdownMenuItem(
-                text = { Text("Zu Setlist hinzufügen") },
+                text = { Text(stringResource(R.string.action_add_to_setlist)) },
                 leadingIcon = {
                     Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null)
                 },
@@ -76,7 +81,10 @@ fun SongOverflowMenu(
             HorizontalDivider()
             DropdownMenuItem(
                 text = {
-                    Text("Löschen", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 },
                 leadingIcon = {
                     Icon(
@@ -112,19 +120,19 @@ fun DeleteSongDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
-        title = { Text("Lied löschen?") },
+        title = { Text(stringResource(R.string.dialog_delete_song_title)) },
         text = {
             Column {
-                Text("„${song.displayTitle}“ wird dauerhaft entfernt.")
+                Text(stringResource(R.string.msg_delete_song_confirm, song.displayTitle))
                 if (affectedSetlists.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Das Lied wird auch aus diesen Setlisten entfernt:",
+                        text = stringResource(R.string.msg_delete_song_setlists),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     affectedSetlists.forEach { setlist ->
                         Text(
-                            text = "• ${setlist.title}",
+                            text = stringResource(R.string.msg_bullet, setlist.title),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(top = 2.dp),
                         )
@@ -140,12 +148,12 @@ fun DeleteSongDialog(
                     contentColor = MaterialTheme.colorScheme.onError,
                 ),
             ) {
-                Text("Löschen")
+                Text(stringResource(R.string.action_delete))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Abbrechen")
+                Text(stringResource(R.string.action_cancel))
             }
         },
     )
@@ -185,6 +193,7 @@ fun EditSongDialog(
     var editTotalBars by remember(song.id) { mutableStateOf(song.totalBars.toString()) }
     var editNotes by remember(song.id) { mutableStateOf(song.notes) }
     var editLyrics by remember(song.id) { mutableStateOf(song.lyrics) }
+    var editPageViews by remember(song.id) { mutableStateOf(song.pageViews) }
 
     val genreSuggestions = remember(knownGenres) {
         knownGenres.asSequence().filter { it.isNotBlank() }.distinct().sorted().toList()
@@ -192,7 +201,11 @@ fun EditSongDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Metadata") },
+        // Shrinks the dialog to the space left by the keyboard instead of letting it
+        // cover the lower fields and the save button.
+        modifier = Modifier.imePadding().padding(horizontal = 16.dp, vertical = 24.dp),
+        properties = InputDialogProperties,
+        title = { Text(stringResource(R.string.dialog_edit_song_title)) },
         text = {
             Column(
                 modifier = Modifier
@@ -202,25 +215,25 @@ fun EditSongDialog(
                 TextField(
                     value = editTitle,
                     onValueChange = { editTitle = it },
-                    label = { Text("Title") },
+                    label = { Text(stringResource(R.string.label_title)) },
                     modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth(),
                 )
                 TextField(
                     value = editArtist,
                     onValueChange = { editArtist = it },
-                    label = { Text("Artist") },
+                    label = { Text(stringResource(R.string.label_artist)) },
                     modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth(),
                 )
                 TextField(
                     value = editVersion,
                     onValueChange = { editVersion = it },
-                    label = { Text("Version") },
+                    label = { Text(stringResource(R.string.label_version)) },
                     modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth(),
                 )
                 TextField(
                     value = editGenre,
                     onValueChange = { editGenre = it },
-                    label = { Text("Genre") },
+                    label = { Text(stringResource(R.string.label_genre)) },
                     singleLine = true,
                     modifier = Modifier.padding(bottom = 4.dp).fillMaxWidth(),
                 )
@@ -233,42 +246,42 @@ fun EditSongDialog(
                 TextField(
                     value = editBpm,
                     onValueChange = { editBpm = it },
-                    label = { Text("BPM") },
+                    label = { Text(stringResource(R.string.label_bpm)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth(),
                 )
                 TextField(
                     value = editTimeSignature,
                     onValueChange = { editTimeSignature = it },
-                    label = { Text("Time Signature") },
+                    label = { Text(stringResource(R.string.label_time_signature)) },
                     modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth(),
                 )
                 TextField(
                     value = editTotalBars,
                     onValueChange = { editTotalBars = it },
-                    label = { Text("Total Bars") },
+                    label = { Text(stringResource(R.string.label_total_bars)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth(),
                 )
                 TextField(
                     value = editNotes,
                     onValueChange = { editNotes = it },
-                    label = { Text("Notes (e.g. Capo, Tuning)") },
+                    label = { Text(stringResource(R.string.label_notes_hint)) },
                     modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth(),
                     minLines = 2,
                 )
                 TextField(
                     value = editLyrics,
                     onValueChange = { editLyrics = it },
-                    label = { Text("Liedtext / Akkorde") },
+                    label = { Text(stringResource(R.string.label_lyrics)) },
                     // Shown for every song: a score can still have its text typed
                     // alongside, and the detail screen can switch between the two.
                     supportingText = {
                         Text(
                             if (song.hasFile) {
-                                "Über die drei Punkte im Lied umschaltbar."
+                                stringResource(R.string.msg_lyrics_toggle_hint)
                             } else {
-                                "Wird als Liedtext angezeigt, solange keine Noten hinterlegt sind."
+                                stringResource(R.string.msg_lyrics_fallback_hint)
                             }
                         )
                     },
@@ -278,7 +291,7 @@ fun EditSongDialog(
 
                 if (onAttachFile != null) {
                     Text(
-                        text = "Noten:",
+                        text = stringResource(R.string.label_score),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 4.dp),
@@ -286,11 +299,11 @@ fun EditSongDialog(
                     Text(
                         text = if (song.hasFile) {
                             when (song.sourceType) {
-                                SongSource.MUSIC_XML -> "MusicXML-Datei hinterlegt"
-                                else -> "PDF hinterlegt"
+                                SongSource.MUSIC_XML -> stringResource(R.string.msg_file_musicxml)
+                                else -> stringResource(R.string.msg_file_pdf)
                             }
                         } else {
-                            "Keine Datei hinterlegt."
+                            stringResource(R.string.msg_file_none)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
@@ -305,7 +318,11 @@ fun EditSongDialog(
                                 contentDescription = null,
                                 modifier = Modifier.padding(end = 4.dp),
                             )
-                            Text(if (song.hasFile) "Ersetzen" else "Hinzufügen")
+                            Text(
+                                stringResource(
+                                    if (song.hasFile) R.string.action_replace else R.string.action_add
+                                )
+                            )
                         }
                         if (song.hasFile && (onRemoveFile != null)) {
                             TextButton(onClick = onRemoveFile) {
@@ -316,31 +333,48 @@ fun EditSongDialog(
                                     modifier = Modifier.padding(end = 4.dp),
                                 )
                                 Text(
-                                    text = "Entfernen",
+                                    text = stringResource(R.string.action_remove),
                                     color = MaterialTheme.colorScheme.error,
                                 )
+                            }
+                        }
+                        if (song.sourceType == SongSource.PDF && editPageViews.isNotEmpty()) {
+                            TextButton(onClick = { editPageViews = emptyMap() }) {
+                                Icon(
+                                    imageVector = Icons.Default.AspectRatio,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(end = 4.dp),
+                                )
+                                Text(text = stringResource(R.string.action_reset_zoom))
                             }
                         }
                     }
                 }
 
                 Text(
-                    text = "Included in Setlists:",
+                    text = stringResource(R.string.msg_included_in_setlists),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
                 if (songSetlists.isEmpty()) {
                     Text(
-                        text = "Not in any setlist yet.",
+                        text = stringResource(R.string.msg_not_in_any_setlist),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
                 } else {
                     songSetlists.forEach { setlist ->
                         Text(
-                            text = "• ${setlist.title}" +
-                                if (setlist.date.isNotBlank()) " (${setlist.date})" else "",
+                            text = if (setlist.date.isNotBlank()) {
+                                stringResource(
+                                    R.string.msg_bullet_with_date,
+                                    setlist.title,
+                                    formatSetlistDate(setlist.date),
+                                )
+                            } else {
+                                stringResource(R.string.msg_bullet, setlist.title)
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(vertical = 2.dp),
                         )
@@ -364,16 +398,17 @@ fun EditSongDialog(
                             totalBars = editTotalBars.toIntOrNull() ?: song.totalBars,
                             notes = editNotes,
                             lyrics = editLyrics,
+                            pageViews = editPageViews,
                         )
                     )
                 }
             ) {
-                Text("Save")
+                Text(stringResource(R.string.action_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         },
     )

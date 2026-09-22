@@ -24,10 +24,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.model.Song
 
 /**
@@ -186,7 +188,13 @@ fun SetlistStripHorizontal(
                     onClick = { onSongClick(song) },
                     // The active position carries the count so "where am I" is answered
                     // without counting tiles.
-                    label = if (isCurrent) "${index + 1}/${songs.size}" else null,
+                    label = if (isCurrent) {
+                        // Compact form without spaces: the tile is barely wider than the
+                        // number itself.
+                        stringResource(R.string.msg_position_of_total, index + 1, songs.size)
+                    } else {
+                        null
+                    },
                     modifier = Modifier
                         .fillMaxHeight()
                         .widthIn(min = 40.dp)

@@ -1,3 +1,138 @@
-<resources>
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="en">
+
+    <!-- Product name, identical in every language. -->
     <string name="app_name">Meine Noten</string>
+
+    <!-- Actions: buttons and menu items -->
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_ok">OK</string>
+    <string name="action_add">Add</string>
+    <string name="action_create">Create</string>
+    <string name="action_import">Import</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_remove">Remove</string>
+    <string name="action_replace">Replace</string>
+    <string name="action_reset_zoom">Reset Zoom</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_add_to_setlist">Add to setlist</string>
+    <string name="action_remove_from_setlist">Remove from setlist</string>
+    <string name="action_start_from_beginning">Start from the beginning</string>
+    <string name="action_resume">Resume: %1$s</string>
+    <string name="action_resume_with_page">Resume: %1$s (p. %2$d)</string>
+    <string name="action_create_new_setlist">Create new setlist …</string>
+
+    <!-- Field labels -->
+    <string name="label_title">Title</string>
+    <string name="label_artist">Artist</string>
+    <string name="label_version">Version</string>
+    <string name="label_genre">Genre</string>
+    <string name="label_bpm">BPM</string>
+    <string name="label_time_signature">Time signature</string>
+    <string name="label_total_bars">Total bars</string>
+    <string name="label_notes">Notes</string>
+    <string name="label_notes_hint">Notes (e.g. capo, tuning)</string>
+    <string name="label_lyrics">Lyrics / Chords</string>
+    <string name="label_setlist_title">Setlist title</string>
+    <string name="label_date">Date (event)</string>
+    <string name="label_date_empty">No date</string>
+    <string name="label_search">Search</string>
+    <string name="label_sort">Sort: %1$s</string>
+    <string name="label_setlist">Setlist</string>
+    <string name="label_score">Score:</string>
+
+    <!-- Sort modes -->
+    <string name="sort_artist">Artist</string>
+    <string name="sort_title">Title</string>
+    <string name="sort_recent">Recent</string>
+    <string name="sort_genre">Genre</string>
+    <string name="sort_setlist_order">Running order</string>
+
+    <!-- Navigation -->
+    <string name="nav_songs">Songs</string>
+    <string name="nav_setlists">Setlists</string>
+
+    <!-- Dialog titles -->
+    <string name="dialog_import_song_title">Import song (PDF/MusicXML)</string>
+    <string name="dialog_add_song_title">Add song manually</string>
+    <string name="dialog_edit_song_title">Edit metadata</string>
+    <string name="dialog_delete_song_title">Delete song?</string>
+    <string name="dialog_new_setlist_title">New setlist</string>
+    <string name="dialog_edit_setlist_title">Edit setlist</string>
+    <string name="dialog_add_to_setlist_title">Add to setlist</string>
+
+    <!-- Messages -->
+    <string name="msg_delete_song_confirm">"%1$s" will be permanently removed.</string>
+    <string name="msg_delete_song_setlists">The song will also be removed from these setlists:</string>
+    <string name="msg_song_removed">"%1$s" removed</string>
+    <string name="msg_included_in_setlists">Included in setlists:</string>
+    <string name="msg_not_in_any_setlist">Not in any setlist yet.</string>
+    <string name="msg_lyrics_toggle_hint">Can be toggled from the song\'s overflow menu.</string>
+    <string name="msg_lyrics_fallback_hint">Shown as lyrics as long as no score is attached.</string>
+    <string name="msg_file_musicxml">MusicXML file attached</string>
+    <string name="msg_file_pdf">PDF attached</string>
+    <string name="msg_file_none">No file attached.</string>
+    <string name="msg_bullet">• %1$s</string>
+    <string name="msg_bullet_with_date">• %1$s (%2$s)</string>
+    <string name="msg_title_with_date">%1$s (%2$s)</string>
+    <string name="msg_setlist_summary">%1$s • %2$s</string>
+    <string name="msg_song_position">%1$d.</string>
+    <string name="msg_page_of">%1$d / %2$d</string>
+    <string name="msg_position_of_total">%1$d/%2$d</string>
+    <string name="msg_song_of_total">%1$d/%2$d · %3$s</string>
+    <string name="msg_list_label">%1$s – %2$s</string>
+
+    <!-- Empty states -->
+    <string name="empty_no_songs">No songs yet.</string>
+    <string name="empty_no_search_results">No matches for "%1$s".</string>
+    <string name="empty_no_filter_results">No songs match the filter.</string>
+    <string name="empty_no_setlists">No setlists yet.</string>
+    <string name="empty_no_setlists_available">No setlists available yet.</string>
+    <string name="empty_no_genre">No genre</string>
+    <string name="empty_select_song">Select a song</string>
+    <string name="empty_select_setlist">Select a setlist</string>
+    <string name="empty_no_content">No lyrics and no score yet. Use the overflow menu to attach a PDF or MusicXML file, or to enter the lyrics.</string>
+
+    <!-- Badges -->
+    <string name="badge_score">Score</string>
+    <string name="badge_text">Text</string>
+
+    <!-- Errors -->
+    <string name="error_no_file_selected">No file selected</string>
+    <string name="error_pdf_load_failed">The PDF could not be loaded</string>
+    <string name="error_file_open_failed">The file could not be opened</string>
+    <string name="error_file_missing">The file does not exist</string>
+    <string name="error_file_read_failed">The file could not be read</string>
+    <string name="error_no_score_in_mxl">No score found in the MXL archive</string>
+    <string name="error_unknown">Unknown error</string>
+
+    <!-- Accessibility: content descriptions -->
+    <string name="cd_back">Back</string>
+    <string name="cd_more_actions">More actions</string>
+    <string name="cd_add_manual_song">Add song manually</string>
+    <string name="cd_import_song">Import song</string>
+    <string name="cd_create_setlist">Create setlist</string>
+    <string name="cd_edit_setlist">Edit setlist</string>
+    <string name="cd_move_up">Move up</string>
+    <string name="cd_move_down">Move down</string>
+    <string name="cd_clear_search">Clear search</string>
+    <string name="cd_clear_filter">Clear filter</string>
+    <string name="cd_clear_date">Clear date</string>
+    <string name="cd_pick_date">Pick date</string>
+    <string name="cd_show_score">Show score</string>
+    <string name="cd_show_lyrics">Show lyrics</string>
+    <string name="cd_previous_page">Previous page</string>
+    <string name="cd_next_page">Next page</string>
+    <string name="cd_page_number">Page %1$d</string>
+
+    <!-- Defaults -->
+    <string name="default_song_title">New Song</string>
+
+    <plurals name="song_count">
+        <item quantity="one">%1$d song</item>
+        <item quantity="other">%1$d songs</item>
+    </plurals>
+
 </resources>

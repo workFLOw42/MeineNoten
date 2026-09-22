@@ -38,13 +38,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
+import de.workflow42.meinenoten.model.PageView
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
@@ -146,6 +149,14 @@ fun SongDetailScreen(
     // A song can hold a score *and* its typed text. The text view is the only option
     // when there is no file, and an opt-in toggle once one has been attached.
     var showLyrics by remember(song.id) { mutableStateOf(!song.hasFile) }
+
+    var localPageViews by remember(song.id, song.pageViews) { mutableStateOf(song.pageViews) }
+
+    LaunchedEffect(localPageViews) {
+        if (localPageViews == song.pageViews) return@LaunchedEffect
+        delay(300)
+        onSongUpdated(song.copy(pageViews = localPageViews))
+    }
     val lyricsVisible = showLyrics || !song.hasFile
 
     // Position within the setlist, or -1 when opened from the song list.
@@ -293,7 +304,12 @@ fun SongDetailScreen(
                         // answerable even where the setlist strip has no room.
                         Text(
                             text = if (setlistIndex >= 0 && setlistSongs.size > 1) {
-                                "${setlistIndex + 1}/${setlistSongs.size} · ${song.displayTitle}"
+                                stringResource(
+                                    R.string.msg_song_of_total,
+                                    setlistIndex + 1,
+                                    setlistSongs.size,
+                                    song.displayTitle,
+                                )
                             } else {
                                 song.displayTitle
                             },
@@ -306,7 +322,7 @@ fun SongDetailScreen(
                             IconButton(onClick = onBackClick) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back"
+                                    contentDescription = stringResource(R.string.cd_back)
                                 )
                             }
                         }
@@ -322,9 +338,9 @@ fun SongDetailScreen(
                                         Icons.AutoMirrored.Filled.Subject
                                     },
                                     contentDescription = if (showLyrics) {
-                                        "Noten anzeigen"
+                                        stringResource(R.string.cd_show_score)
                                     } else {
-                                        "Liedtext anzeigen"
+                                        stringResource(R.string.cd_show_lyrics)
                                     },
                                 )
                             }
@@ -337,7 +353,11 @@ fun SongDetailScreen(
                         )
                         if (isPagedDocument && pageCount > 0) {
                             Text(
-                                text = "${currentPage.coerceAtLeast(0) + 1} / $pageCount",
+                                text = stringResource(
+                                    R.string.msg_page_of,
+                                    currentPage.coerceAtLeast(0) + 1,
+                                    pageCount,
+                                ),
                                 style = MaterialTheme.typography.labelLarge,
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
@@ -379,22 +399,27 @@ fun SongDetailScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Tap zones: left third = previous page, right third = next page,
-                // centre = toggle the UI. Horizontal swipes also turn pages.
+                // Tap zones: lower third: left half = back, right half = forward.
+                // Everywhere else = toggle UI. Horizontal swipe turns pages when not zoomed.
                 .pointerInput(isPagedDocument, pageCount) {
-                    val zone = size.width / 3f
                     detectTapGestures { offset ->
                         focusRequester.requestFocus()
-                        when {
-                            !isPagedDocument -> isUiVisible = !isUiVisible
-                            offset.x < zone -> goToPreviousPage()
-                            offset.x > size.width - zone -> goToNextPage()
-                            else -> isUiVisible = !isUiVisible
+                        val lowerThirdHeight = size.height * 2f / 3f
+                        if (offset.y > lowerThirdHeight) {
+                            if (offset.x < size.width / 2f) {
+                                goToPreviousPage()
+                            } else {
+                                goToNextPage()
+                            }
+                        } else {
+                            isUiVisible = !isUiVisible
                         }
                     }
                 }
-                .pointerInput(isPagedDocument, pageCount) {
+                .pointerInput(isPagedDocument, pageCount, localPageViews, currentPage) {
                     if (!isPagedDocument) return@pointerInput
+                    val currentScale = localPageViews[currentPage.coerceAtLeast(0)]?.scale ?: 1f
+                    if (currentScale > 1.01f) return@pointerInput
                     var dragAmount = 0f
                     detectHorizontalDragGestures(
                         onDragStart = { dragAmount = 0f },
@@ -438,9 +463,7 @@ fun SongDetailScreen(
                         } else {
                             // Reachable for a song that has neither file nor text yet.
                             Text(
-                                text = "Noch kein Liedtext und keine Noten. Über die drei " +
-                                    "Punkte lässt sich eine PDF- oder MusicXML-Datei " +
-                                    "hinzufügen oder der Text eintragen.",
+                                text = stringResource(R.string.empty_no_content),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.outline
                             )
@@ -456,8 +479,13 @@ fun SongDetailScreen(
                 else -> {
                     PdfView(
                         fileUri = song.fileUri,
-                        // -1 means "last page", not yet resolved – clamp until it is.
                         currentPage = currentPage.coerceAtLeast(0),
+                        pageView = localPageViews[currentPage.coerceAtLeast(0)] ?: PageView(),
+                        onPageViewChange = { newView ->
+                            localPageViews = localPageViews.toMutableMap().apply {
+                                put(currentPage.coerceAtLeast(0), newView)
+                            }
+                        },
                         modifier = Modifier.padding(if (isUiVisible) innerPadding else PaddingValues(0.dp)),
                         onPageCountReady = { count ->
                             pageCount = count
@@ -514,7 +542,7 @@ fun SongDetailScreen(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            text = "Notes",
+                            text = stringResource(R.string.label_notes),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -561,10 +589,17 @@ fun SongDetailScreen(
                             onClick = { goToPreviousPage() },
                             enabled = currentPage > 0 || previousSong != null
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Vorherige Seite")
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.cd_previous_page),
+                            )
                         }
                         Text(
-                            text = "${currentPage.coerceAtLeast(0) + 1} / $pageCount",
+                            text = stringResource(
+                                R.string.msg_page_of,
+                                currentPage.coerceAtLeast(0) + 1,
+                                pageCount,
+                            ),
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
@@ -572,7 +607,10 @@ fun SongDetailScreen(
                             onClick = { goToNextPage() },
                             enabled = currentPage < pageCount - 1 || nextSong != null
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Nächste Seite")
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = stringResource(R.string.cd_next_page),
+                            )
                         }
                     }
                 }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
@@ -16,17 +17,40 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
+import de.workflow42.meinenoten.ui.components.AlphabetIndex
 import de.workflow42.meinenoten.ui.components.SongFilterBar
 import de.workflow42.meinenoten.ui.components.SongOverflowMenu
+import de.workflow42.meinenoten.ui.components.SongSectionHeader
+import de.workflow42.meinenoten.ui.util.SongHeading
 import de.workflow42.meinenoten.ui.util.SongSortMode
 import de.workflow42.meinenoten.ui.util.groupHeading
 import de.workflow42.meinenoten.ui.util.sortedBySetlistOrder
 import de.workflow42.meinenoten.ui.util.sortedForDisplay
+
+/**
+ * A song together with its 1-based place in the list.
+ *
+ * The position is carried alongside the song because once headers are interleaved a row
+ * can no longer derive its own place, and the running order is called out by number.
+ */
+private data class SongEntry(val song: Song, val position: Int)
+
+/**
+ * A run of songs under one heading, or a single unheaded run when the sort mode is not
+ * grouped ([label] is then null).
+ *
+ * The screen groups its sorted songs once and both renders from this and derives the jump
+ * index from it, so the letters down the edge cannot disagree with the headings in the
+ * list about where a section begins.
+ */
+private data class SongSection(val label: String?, val entries: List<SongEntry>)
 
 @Composable
 fun SongListScreen(
@@ -49,6 +73,9 @@ fun SongListScreen(
     var selectedGenre by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSetlistId by rememberSaveable { mutableStateOf<String?>(null) }
     var sortMode by rememberSaveable { mutableStateOf(SongSortMode.ARTIST) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+
+    val listState = rememberLazyListState()
 
     // Keyed on a snapshot of the contents, not on `songs` itself: the caller passes a
     // SnapshotStateList whose identity never changes, so keying on the instance would
@@ -67,10 +94,11 @@ fun SongListScreen(
     val activeSetlist = setlists.find { it.id == selectedSetlistId }
     val activeGenre = selectedGenre?.takeIf { genres.contains(it) }
 
-    val visibleSongs = remember(songList, activeGenre, activeSetlist, sortMode) {
+    val visibleSongs = remember(songList, activeGenre, activeSetlist, sortMode, searchQuery) {
         val filtered = songList
             .filter { activeGenre == null || (it.genre.equals(activeGenre, ignoreCase = true)) }
             .filter { activeSetlist == null || activeSetlist.songIds.contains(it.id) }
+            .filter { it.matches(searchQuery) }
 
         if (sortMode == SongSortMode.SETLIST_ORDER && activeSetlist != null) {
             filtered.sortedBySetlistOrder(activeSetlist.songIds)
@@ -79,6 +107,49 @@ fun SongListScreen(
         }
     }
 
+    // Grouped once, up front. Songs keep their overall position across sections, because
+    // "number four" means fourth in the programme, not fourth under its letter.
+    //
+    // The heading for genre-less songs is resolved here, outside the remember block:
+    // stringResource needs a composable scope, and SortUtils deliberately holds no
+    // display text of its own.
+    val noGenreHeading = stringResource(R.string.empty_no_genre)
+    val sections = remember(visibleSongs, sortMode, noGenreHeading) {
+        visibleSongs
+            .mapIndexed { index, song -> SongEntry(song, position = index + 1) }
+            .groupBy { it.song.groupHeading(sortMode) }
+            .map { (heading, entries) ->
+                val label = when (heading) {
+                    is SongHeading.Text -> heading.value
+                    SongHeading.Untitled -> noGenreHeading
+                    SongHeading.None -> null
+                }
+                SongSection(label, entries)
+            }
+    }
+
+    // Only the letter-based modes get an index: it can only jump by whatever the list is
+    // sorted on, so under genre sorting the letters down the edge would be genre initials
+    // while the eye expects titles.
+    val indexSections = remember(sections, sortMode) {
+        if (sortMode != SongSortMode.ARTIST && sortMode != SongSortMode.TITLE) {
+            emptyList()
+        } else {
+            // Walking the sections in order mirrors exactly how they are emitted below,
+            // counting one item per header plus one per song, so each letter maps to the
+            // list index of its own header.
+            var itemIndex = 0
+            sections.mapNotNull { section ->
+                val label = section.label
+                val headerIndex = itemIndex
+                if (label != null) itemIndex++
+                itemIndex += section.entries.size
+                label?.let { it to headerIndex }
+            }
+        }
+    }
+
+
     Scaffold(
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End) {
@@ -86,10 +157,10 @@ fun SongListScreen(
                     onClick = onAddManual,
                     modifier = Modifier.padding(bottom = 8.dp)
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = "Add Manual Note")
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.cd_add_manual_song))
                 }
                 FloatingActionButton(onClick = onImportPdf) {
-                    Icon(Icons.Default.Add, contentDescription = "Import PDF")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_import_song))
                 }
             }
         },
@@ -102,6 +173,8 @@ fun SongListScreen(
                 selectedGenre = activeGenre,
                 selectedSetlistId = activeSetlist?.id,
                 sortMode = sortMode,
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it },
                 onGenreSelected = { selectedGenre = it },
                 onSetlistSelected = { id ->
                     selectedSetlistId = id
@@ -122,12 +195,15 @@ fun SongListScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        // Distinguishing the two cases matters: an empty library needs an
-                        // import, an empty filter result needs the filter cleared.
-                        text = if (songList.isEmpty()) {
-                            "Noch keine Lieder vorhanden."
-                        } else {
-                            "Keine Lieder passen zum Filter."
+                        // Three different dead ends needing three different remedies: add
+                        // a song, clear the search, or clear the filter. A single "nothing
+                        // found" would leave the reader guessing which.
+                        text = when {
+                            songList.isEmpty() -> stringResource(R.string.empty_no_songs)
+                            searchQuery.isNotBlank() ->
+                                stringResource(R.string.empty_no_search_results, searchQuery)
+
+                            else -> stringResource(R.string.empty_no_filter_results)
                         },
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.outline
@@ -136,106 +212,154 @@ fun SongListScreen(
                 return@Column
             }
 
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(visibleSongs, key = { it.id }) { song ->
-                    // Headings only appear when sorting by genre, where they turn a flat
-                    // list into browsable sections.
-                    val heading = song.groupHeading(sortMode)
-                    val previousHeading = visibleSongs
-                        .getOrNull(visibleSongs.indexOf(song) - 1)
-                        ?.groupHeading(sortMode)
-
-                    if (heading != null && heading != previousHeading) {
-                        Text(
-                            text = heading,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(
-                                start = 16.dp,
-                                end = 16.dp,
-                                top = 16.dp,
-                                bottom = 4.dp
-                            )
-                        )
-                    }
-
-                    ListItem(
-                        headlineContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                // In running order the position is what people call out
-                                // ("number four"), so it leads the line.
-                                if (sortMode == SongSortMode.SETLIST_ORDER) {
-                                    Text(
-                                        text = "${visibleSongs.indexOf(song) + 1}.",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(end = 10.dp)
-                                    )
-                                }
-                                Text(
-                                    text = song.listLabel,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                )
-                                if (song.sourceType != SongSource.PDF) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Badge(
-                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                    ) {
-                                        Text(
-                                            text = when (song.sourceType) {
-                                                SongSource.MUSIC_XML -> "Noten"
-                                                else -> "Text"
-                                            },
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
-                                    }
-                                }
+            // The index overlays the list rather than sitting beside it: reserving a
+            // permanent column would narrow every title for the sake of a control that is
+            // only visible while scrolling.
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Emitted section by section so the headings can stick: while
+                    // scrolling through a long stretch of one letter, that letter stays
+                    // pinned at the top instead of scrolling away and leaving no clue
+                    // where you are. Each header is still exactly one item, so the flat
+                    // positions the jump index was built from stay correct.
+                    sections.forEach { section ->
+                        if (section.label != null) {
+                            stickyHeader(key = "header-${sortMode.name}-${section.label}") {
+                                SongSectionHeader(label = section.label)
                             }
-                        },
-                        // Genre as a quiet second line: helpful when scanning for
-                        // "something for Advent", never competing with the title. Omitted
-                        // while grouping by genre, where the heading already says it.
-                        supportingContent = song.genre
-                            .takeIf { it.isNotBlank() && sortMode != SongSortMode.GENRE }
-                            ?.let { genre ->
-                                {
-                                    Text(
-                                        text = genre,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                }
-                            },
-                        trailingContent = {
-                            // One overflow menu instead of a single visible action: the
-                            // list offers the same three song actions as the detail
-                            // screen, and a destructive one among them must not sit
-                            // exposed next to a row that is tapped to open a song.
-                            SongOverflowMenu(
-                                onEdit = { onEditSong(song) },
-                                onAddToSetlist = { onAddToSetlist(song) },
-                                onDelete = { onDeleteSong(song) },
+                        }
+
+                        items(
+                            items = section.entries,
+                            key = { it.song.id }
+                        ) { entry ->
+                            SongListRow(
+                                song = entry.song,
+                                position = entry.position,
+                                sortMode = sortMode,
+                                onClick = { onSongClick(entry.song, activeSetlist?.id) },
+                                onEdit = { onEditSong(entry.song) },
+                                onAddToSetlist = { onAddToSetlist(entry.song) },
+                                onDelete = { onDeleteSong(entry.song) },
                             )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            // Passing the active setlist along keeps pedal paging and the
-                            // jump strip working, exactly as if opened from the setlist.
-                            .clickable { onSongClick(song, activeSetlist?.id) }
-                    )
-                    HorizontalDivider()
+                        }
+                    }
                 }
+
+                AlphabetIndex(
+                    sections = indexSections,
+                    listState = listState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(vertical = 8.dp),
+                )
             }
         }
     }
 }
 
 /**
+ * One song in the list.
+ *
+ * [position] is its 1-based place in the list, shown only in running order – it comes
+ * from the caller because the row cannot see its own place once headers are interleaved.
+ */
+@Composable
+private fun SongListRow(
+    song: Song,
+    position: Int,
+    sortMode: SongSortMode,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onAddToSetlist: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column {
+        ListItem(
+            headlineContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // In running order the position is what people call out
+                    // ("number four"), so it leads the line.
+                    if (sortMode == SongSortMode.SETLIST_ORDER) {
+                        Text(
+                            text = "$position.",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(end = 10.dp)
+                        )
+                    }
+                    Text(
+                        text = song.listLabel,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (song.sourceType != SongSource.PDF) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    when (song.sourceType) {
+                                        SongSource.MUSIC_XML -> R.string.badge_score
+                                        else -> R.string.badge_text
+                                    }
+                                ),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+            },
+            // Genre as a quiet second line: helpful when scanning for
+            // "something for Advent", never competing with the title. Omitted
+            // while grouping by genre, where the heading already says it.
+            supportingContent = song.genre
+                .takeIf { it.isNotBlank() && sortMode != SongSortMode.GENRE }
+                ?.let { genre ->
+                    {
+                        Text(
+                            text = genre,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                },
+            trailingContent = {
+                // One overflow menu instead of a single visible action: the
+                // list offers the same three song actions as the detail
+                // screen, and a destructive one among them must not sit
+                // exposed next to a row that is tapped to open a song.
+                SongOverflowMenu(
+                    onEdit = onEdit,
+                    onAddToSetlist = onAddToSetlist,
+                    onDelete = onDelete,
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                // Passing the active setlist along keeps pedal paging and the
+                // jump strip working, exactly as if opened from the setlist.
+                .clickable(onClick = onClick)
+        )
+        HorizontalDivider()
+    }
+}
+
+/**
  * "Artist – Title" on one line, or just the title when no artist is set. Keeping both
  * parts on a single line lets the eye scan straight down the list.
+ *
+ * Composable rather than a plain property, because the separator is part of the
+ * translatable resource rather than hard-coded punctuation.
  */
 private val Song.listLabel: String
-    get() = if (artist.isNotBlank()) "$artist – $displayTitle" else displayTitle
+    @Composable get() = if (artist.isNotBlank()) {
+        stringResource(R.string.msg_list_label, artist, displayTitle)
+    } else {
+        displayTitle
+    }

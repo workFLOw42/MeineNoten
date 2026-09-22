@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -24,12 +27,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.ui.components.DateField
+import de.workflow42.meinenoten.ui.components.InputDialogProperties
 import de.workflow42.meinenoten.ui.util.formatSetlistDate
 import de.workflow42.meinenoten.ui.util.sortedForDisplay
 import kotlinx.coroutines.launch
@@ -47,7 +54,7 @@ fun SetlistScreen(
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = onCreateSetlist) {
-                Icon(Icons.Default.Add, contentDescription = "Create Setlist")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_create_setlist))
             }
         },
         modifier = modifier,
@@ -60,7 +67,7 @@ fun SetlistScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Noch keine Setlisten vorhanden.",
+                    text = stringResource(R.string.empty_no_setlists),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -79,9 +86,17 @@ fun SetlistScreen(
                 ListItem(
                     headlineContent = { Text(text = setlist.title) },
                     supportingContent = {
-                        val songLabel = if (songCount == 1) "1 Lied" else "$songCount Lieder"
+                        val songLabel = pluralStringResource(
+                            R.plurals.song_count,
+                            songCount,
+                            songCount,
+                        )
                         Text(
-                            if (dateLabel.isNotBlank()) "$dateLabel • $songLabel" else songLabel
+                            if (dateLabel.isNotBlank()) {
+                                stringResource(R.string.msg_setlist_summary, dateLabel, songLabel)
+                            } else {
+                                songLabel
+                            }
                         )
                     },
                     modifier = Modifier
@@ -142,6 +157,13 @@ fun SetlistDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // The snackbar is raised from a callback, outside any composable scope, so its texts
+    // are resolved here and captured. The message keeps its placeholder until the song is
+    // known; reading it through stringResource rather than a Context keeps it
+    // configuration-aware, so a language change while the screen is open is picked up.
+    val removedTemplate = stringResource(R.string.msg_song_removed)
+    val undoLabel = stringResource(R.string.action_undo)
+
     // Hoisted out of the row callbacks on purpose. The row that triggers the removal
     // leaves the composition immediately, and its captured copy of songIds ages the
     // moment anything else changes the order, so both the cut and the undo are resolved
@@ -160,8 +182,8 @@ fun SetlistDetailScreen(
         // original position rather than appending it to the end.
         scope.launch {
             val result = snackbarHostState.showSnackbar(
-                message = "\"${song.displayTitle}\" entfernt",
-                actionLabel = "Widerrufen",
+                message = removedTemplate.format(song.displayTitle),
+                actionLabel = undoLabel,
                 withDismissAction = true,
                 duration = SnackbarDuration.Short,
             )
@@ -179,13 +201,15 @@ fun SetlistDetailScreen(
     if (showEditDialog) {
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
-            title = { Text("Edit Setlist") },
+            modifier = Modifier.imePadding().padding(horizontal = 16.dp, vertical = 24.dp),
+            properties = InputDialogProperties,
+            title = { Text(stringResource(R.string.dialog_edit_setlist_title)) },
             text = {
-                Column {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     TextField(
                         value = editTitle,
                         onValueChange = { editTitle = it },
-                        label = { Text("Title") },
+                        label = { Text(stringResource(R.string.label_title)) },
                         modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()
                     )
                     DateField(
@@ -196,7 +220,7 @@ fun SetlistDetailScreen(
                     TextField(
                         value = editNotes,
                         onValueChange = { editNotes = it },
-                        label = { Text("Notes") },
+                        label = { Text(stringResource(R.string.label_notes)) },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3
                     )
@@ -215,12 +239,12 @@ fun SetlistDetailScreen(
                         showEditDialog = false
                     }
                 ) {
-                    Text("Save")
+                    Text(stringResource(R.string.action_save))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showEditDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -243,14 +267,17 @@ fun SetlistDetailScreen(
                         IconButton(onClick = onBackClick) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
+                                contentDescription = stringResource(R.string.cd_back)
                             )
                         }
                     }
                 },
                 actions = {
                     IconButton(onClick = { showEditDialog = true }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Setlist")
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = stringResource(R.string.cd_edit_setlist),
+                        )
                     }
                 }
             )
@@ -295,12 +322,18 @@ fun SetlistDetailScreen(
                                     modifier = Modifier.padding(end = 8.dp),
                                 )
                                 Text(
-                                    text = "Fortsetzen: ${resumeTarget.displayTitle}" +
-                                        if (setlist.lastPage > 0) {
-                                            " (S. ${setlist.lastPage + 1})"
-                                        } else {
-                                            ""
-                                        },
+                                    text = if (setlist.lastPage > 0) {
+                                        stringResource(
+                                            R.string.action_resume_with_page,
+                                            resumeTarget.displayTitle,
+                                            setlist.lastPage + 1,
+                                        )
+                                    } else {
+                                        stringResource(
+                                            R.string.action_resume,
+                                            resumeTarget.displayTitle,
+                                        )
+                                    },
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -319,7 +352,7 @@ fun SetlistDetailScreen(
                                 contentDescription = null,
                                 modifier = Modifier.padding(end = 8.dp),
                             )
-                            Text("Von Anfang an")
+                            Text(stringResource(R.string.action_start_from_beginning))
                         }
                     }
                     HorizontalDivider()
@@ -379,7 +412,7 @@ private fun SetlistSongRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Songs get called out by their number in rehearsal ("let's do the four").
                 Text(
-                    text = "$number.",
+                    text = stringResource(R.string.msg_song_position, number),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -394,21 +427,30 @@ private fun SetlistSongRow(
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Nach oben")
+                    Icon(
+                        Icons.Default.KeyboardArrowUp,
+                        contentDescription = stringResource(R.string.cd_move_up),
+                    )
                 }
                 IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Nach unten")
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = stringResource(R.string.cd_move_down),
+                    )
                 }
                 Box {
                     IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Weitere Aktionen")
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.cd_more_actions),
+                        )
                     }
                     DropdownMenu(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Aus Setlist entfernen") },
+                            text = { Text(stringResource(R.string.action_remove_from_setlist)) },
                             leadingIcon = {
                                 Icon(Icons.Default.Delete, contentDescription = null)
                             },

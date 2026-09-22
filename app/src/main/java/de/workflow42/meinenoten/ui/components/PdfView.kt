@@ -18,10 +18,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import de.workflow42.meinenoten.model.PageView
 import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
+import de.workflow42.meinenoten.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -77,6 +86,8 @@ private object GlobalPdfCache {
 fun PdfView(
     fileUri: String,
     currentPage: Int,
+    pageView: PageView = PageView(),
+    onPageViewChange: (PageView) -> Unit = {},
     modifier: Modifier = Modifier,
     onPageCountReady: (Int) -> Unit = {},
 ) {
@@ -87,15 +98,32 @@ fun PdfView(
     var pageCount by remember(fileUri) { mutableIntStateOf(0) }
     var error by remember(fileUri) { mutableStateOf<String?>(null) }
 
+    var scale by remember(fileUri, currentPage) { mutableStateOf(pageView.scale) }
+    var offsetXRatio by remember(fileUri, currentPage) { mutableStateOf(pageView.offsetXRatio) }
+    var offsetYRatio by remember(fileUri, currentPage) { mutableStateOf(pageView.offsetYRatio) }
+
+    LaunchedEffect(pageView) {
+        scale = pageView.scale
+        offsetXRatio = pageView.offsetXRatio
+        offsetYRatio = pageView.offsetYRatio
+    }
+
     // Target width in pixels, capped so large scores stay memory friendly.
     val targetWidth = remember {
         val metrics = context.resources.displayMetrics
         (maxOf(metrics.widthPixels, metrics.heightPixels) * 1.5f).toInt().coerceAtMost(3000)
     }
 
+    // Resolved up front: the messages are assigned from a background dispatcher, where
+    // stringResource cannot be called.
+    val noFileMessage = stringResource(R.string.error_no_file_selected)
+    val loadFailedMessage = stringResource(R.string.error_pdf_load_failed)
+    val openFailedMessage = stringResource(R.string.error_file_open_failed)
+    val fileMissingMessage = stringResource(R.string.error_file_missing)
+
     LaunchedEffect(fileUri, currentPage) {
         if (fileUri.isEmpty()) {
-            error = "Keine Datei ausgewählt"
+            error = noFileMessage
             return@LaunchedEffect
         }
 
@@ -103,7 +131,7 @@ fun PdfView(
 
         withContext(Dispatchers.IO) {
             try {
-                openRenderer(context, fileUri).use { pfd ->
+                openRenderer(context, fileUri, openFailedMessage, fileMissingMessage).use { pfd ->
                     PdfRenderer(pfd).use { renderer ->
                         if (pageCount != renderer.pageCount) {
                             pageCount = renderer.pageCount
@@ -132,7 +160,7 @@ fun PdfView(
                     }
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) { error = e.message ?: "PDF konnte nicht geladen werden" }
+                withContext(Dispatchers.Main) { error = e.message ?: loadFailedMessage }
             }
         }
     }
@@ -141,9 +169,67 @@ fun PdfView(
         visible?.takeIf { !it.isRecycled }?.let { bitmap ->
             Image(
                 bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Seite ${currentPage + 1}",
+                contentDescription = stringResource(R.string.cd_page_number, currentPage + 1),
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(fileUri, currentPage) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val pressedPointers = event.changes.filter { it.pressed }
+                                
+                                if (pressedPointers.size >= 2) {
+                                    val zoomDelta = event.calculateZoom()
+                                    val panDelta = event.calculatePan()
+                                    
+                                    val oldScale = scale
+                                    scale = (scale * zoomDelta).coerceIn(1f, 5f)
+                                    
+                                    val maxOffset = (scale - 1f) / 2f
+                                    offsetXRatio = (offsetXRatio + panDelta.x / size.width).coerceIn(-maxOffset, maxOffset)
+                                    offsetYRatio = (offsetYRatio + panDelta.y / size.height).coerceIn(-maxOffset, maxOffset)
+                                    
+                                    if (zoomDelta != 1f || panDelta != Offset.Zero || scale != oldScale) {
+                                        onPageViewChange(PageView(scale, offsetXRatio, offsetYRatio))
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                } else if (pressedPointers.size == 1 && scale > 1.01f) {
+                                    val panDelta = event.calculatePan()
+                                    if (panDelta != Offset.Zero) {
+                                        val maxOffset = (scale - 1f) / 2f
+                                        offsetXRatio = (offsetXRatio + panDelta.x / size.width).coerceIn(-maxOffset, maxOffset)
+                                        offsetYRatio = (offsetYRatio + panDelta.y / size.height).coerceIn(-maxOffset, maxOffset)
+                                        
+                                        onPageViewChange(PageView(scale, offsetXRatio, offsetYRatio))
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .pointerInput(fileUri, currentPage) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                if (scale > 1.1f) {
+                                    scale = 1f
+                                    offsetXRatio = 0f
+                                    offsetYRatio = 0f
+                                } else {
+                                    scale = 2f
+                                    offsetXRatio = 0f
+                                    offsetYRatio = 0f
+                                }
+                                onPageViewChange(PageView(scale, offsetXRatio, offsetYRatio))
+                            }
+                        )
+                    }
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offsetXRatio * size.width
+                        translationY = offsetYRatio * size.height
+                    },
             )
         }
 
@@ -162,14 +248,25 @@ fun PdfView(
     }
 }
 
-private fun openRenderer(context: Context, fileUri: String): ParcelFileDescriptor {
+/**
+ * Opens [fileUri] for reading, whether it is a content URI or a plain file path.
+ *
+ * The failure messages are passed in rather than resolved here: this runs off the main
+ * thread, where there is no composable scope to read them from.
+ */
+private fun openRenderer(
+    context: Context,
+    fileUri: String,
+    openFailedMessage: String,
+    fileMissingMessage: String,
+): ParcelFileDescriptor {
     val uri = fileUri.toUri()
     return if (uri.scheme == "content") {
         context.contentResolver.openFileDescriptor(uri, "r")
-            ?: throw IllegalStateException("Datei konnte nicht geöffnet werden")
+            ?: throw IllegalStateException(openFailedMessage)
     } else {
         val file = File(uri.path ?: "")
-        if (!file.exists()) throw IllegalStateException("Datei existiert nicht")
+        if (!file.exists()) throw IllegalStateException(fileMissingMessage)
         ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
     }
 }
@@ -196,12 +293,17 @@ fun PdfPreloader(fileUri: String) {
         (maxOf(metrics.widthPixels, metrics.heightPixels) * 1.5f).toInt().coerceAtMost(3000)
     }
 
+    // Never surfaced here – a failed preload stays silent – but [openRenderer] runs off
+    // the main thread and so cannot resolve them itself.
+    val openFailedMessage = stringResource(R.string.error_file_open_failed)
+    val fileMissingMessage = stringResource(R.string.error_file_missing)
+
     LaunchedEffect(fileUri) {
         if (fileUri.isEmpty() || GlobalPdfCache.get(fileUri, 0) != null) return@LaunchedEffect
 
         withContext(Dispatchers.IO) {
             try {
-                openRenderer(context, fileUri).use { pfd ->
+                openRenderer(context, fileUri, openFailedMessage, fileMissingMessage).use { pfd ->
                     PdfRenderer(pfd).use { renderer ->
                         if (renderer.pageCount > 0) {
                             val bitmap = renderer.renderPage(0, targetWidth)

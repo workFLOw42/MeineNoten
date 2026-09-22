@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Meine Noten</string>
+
+    <!-- Aktionen: Knöpfe und Menüeinträge -->
+    <string name="action_save">Speichern</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_ok">OK</string>
+    <string name="action_add">Hinzufügen</string>
+    <string name="action_create">Anlegen</string>
+    <string name="action_import">Importieren</string>
+    <string name="action_edit">Bearbeiten</string>
+    <string name="action_delete">Löschen</string>
+    <string name="action_remove">Entfernen</string>
+    <string name="action_replace">Ersetzen</string>
+    <string name="action_reset_zoom">Zoom zurücksetzen</string>
+    <string name="action_undo">Widerrufen</string>
+    <string name="action_add_to_setlist">Zu Setlist hinzufügen</string>
+    <string name="action_remove_from_setlist">Aus Setlist entfernen</string>
+    <string name="action_start_from_beginning">Von Anfang an</string>
+    <string name="action_resume">Fortsetzen: %1$s</string>
+    <string name="action_resume_with_page">Fortsetzen: %1$s (S. %2$d)</string>
+    <string name="action_create_new_setlist">Neue Setlist anlegen …</string>
+
+    <!-- Feldbeschriftungen -->
+    <string name="label_title">Titel</string>
+    <string name="label_artist">Künstler</string>
+    <string name="label_version">Version</string>
+    <string name="label_genre">Genre</string>
+    <string name="label_bpm">BPM</string>
+    <string name="label_time_signature">Taktart</string>
+    <string name="label_total_bars">Takte insgesamt</string>
+    <string name="label_notes">Notizen</string>
+    <string name="label_notes_hint">Notizen (z. B. Kapodaster, Stimmung)</string>
+    <string name="label_lyrics">Liedtext / Akkorde</string>
+    <string name="label_setlist_title">Titel der Setlist</string>
+    <string name="label_date">Datum (Termin)</string>
+    <string name="label_date_empty">Kein Termin</string>
+    <string name="label_search">Suchen</string>
+    <string name="label_sort">Sortierung: %1$s</string>
+    <string name="label_setlist">Setlist</string>
+    <string name="label_score">Noten:</string>
+
+    <!-- Sortierung -->
+    <string name="sort_artist">Künstler</string>
+    <string name="sort_title">Titel</string>
+    <string name="sort_recent">Zuletzt</string>
+    <string name="sort_genre">Genre</string>
+    <string name="sort_setlist_order">Reihenfolge</string>
+
+    <!-- Navigation -->
+    <string name="nav_songs">Lieder</string>
+    <string name="nav_setlists">Setlisten</string>
+
+    <!-- Dialogtitel -->
+    <string name="dialog_import_song_title">Lied importieren (PDF/MusicXML)</string>
+    <string name="dialog_add_song_title">Lied manuell anlegen</string>
+    <string name="dialog_edit_song_title">Metadaten bearbeiten</string>
+    <string name="dialog_delete_song_title">Lied löschen?</string>
+    <string name="dialog_new_setlist_title">Neue Setlist</string>
+    <string name="dialog_edit_setlist_title">Setlist bearbeiten</string>
+    <string name="dialog_add_to_setlist_title">Zu Setlist hinzufügen</string>
+
+    <!-- Meldungen -->
+    <string name="msg_delete_song_confirm">„%1$s“ wird dauerhaft entfernt.</string>
+    <string name="msg_delete_song_setlists">Das Lied wird auch aus diesen Setlisten entfernt:</string>
+    <string name="msg_song_removed">„%1$s“ entfernt</string>
+    <string name="msg_included_in_setlists">In Setlisten enthalten:</string>
+    <string name="msg_not_in_any_setlist">Noch in keiner Setlist.</string>
+    <string name="msg_lyrics_toggle_hint">Über die drei Punkte im Lied umschaltbar.</string>
+    <string name="msg_lyrics_fallback_hint">Wird als Liedtext angezeigt, solange keine Noten hinterlegt sind.</string>
+    <string name="msg_file_musicxml">MusicXML-Datei hinterlegt</string>
+    <string name="msg_file_pdf">PDF hinterlegt</string>
+    <string name="msg_file_none">Keine Datei hinterlegt.</string>
+    <string name="msg_bullet">• %1$s</string>
+    <string name="msg_bullet_with_date">• %1$s (%2$s)</string>
+    <string name="msg_title_with_date">%1$s (%2$s)</string>
+    <string name="msg_setlist_summary">%1$s • %2$s</string>
+    <string name="msg_song_position">%1$d.</string>
+    <string name="msg_page_of">%1$d / %2$d</string>
+    <string name="msg_position_of_total">%1$d/%2$d</string>
+    <string name="msg_song_of_total">%1$d/%2$d · %3$s</string>
+    <string name="msg_list_label">%1$s – %2$s</string>
+
+    <!-- Leere Zustände -->
+    <string name="empty_no_songs">Noch keine Lieder vorhanden.</string>
+    <string name="empty_no_search_results">Keine Treffer für „%1$s“.</string>
+    <string name="empty_no_filter_results">Keine Lieder passen zum Filter.</string>
+    <string name="empty_no_setlists">Noch keine Setlisten vorhanden.</string>
+    <string name="empty_no_setlists_available">Noch keine Setlisten vorhanden.</string>
+    <string name="empty_no_genre">Ohne Genre</string>
+    <string name="empty_select_song">Lied auswählen</string>
+    <string name="empty_select_setlist">Setlist auswählen</string>
+    <string name="empty_no_content">Noch kein Liedtext und keine Noten. Über die drei Punkte lässt sich eine PDF- oder MusicXML-Datei hinzufügen oder der Text eintragen.</string>
+
+    <!-- Abzeichen -->
+    <string name="badge_score">Noten</string>
+    <string name="badge_text">Text</string>
+
+    <!-- Fehler -->
+    <string name="error_no_file_selected">Keine Datei ausgewählt</string>
+    <string name="error_pdf_load_failed">PDF konnte nicht geladen werden</string>
+    <string name="error_file_open_failed">Datei konnte nicht geöffnet werden</string>
+    <string name="error_file_missing">Datei existiert nicht</string>
+    <string name="error_file_read_failed">Datei konnte nicht gelesen werden</string>
+    <string name="error_no_score_in_mxl">Keine Notendatei im MXL-Archiv gefunden</string>
+    <string name="error_unknown">Unbekannter Fehler</string>
+
+    <!-- Bedienhilfe: Inhaltsbeschreibungen -->
+    <string name="cd_back">Zurück</string>
+    <string name="cd_more_actions">Weitere Aktionen</string>
+    <string name="cd_add_manual_song">Lied manuell anlegen</string>
+    <string name="cd_import_song">Lied importieren</string>
+    <string name="cd_create_setlist">Setlist anlegen</string>
+    <string name="cd_edit_setlist">Setlist bearbeiten</string>
+    <string name="cd_move_up">Nach oben</string>
+    <string name="cd_move_down">Nach unten</string>
+    <string name="cd_clear_search">Suche löschen</string>
+    <string name="cd_clear_filter">Filter entfernen</string>
+    <string name="cd_clear_date">Datum entfernen</string>
+    <string name="cd_pick_date">Datum wählen</string>
+    <string name="cd_show_score">Noten anzeigen</string>
+    <string name="cd_show_lyrics">Liedtext anzeigen</string>
+    <string name="cd_previous_page">Vorherige Seite</string>
+    <string name="cd_next_page">Nächste Seite</string>
+    <string name="cd_page_number">Seite %1$d</string>
+
+    <!-- Voreinstellungen -->
+    <string name="default_song_title">Neues Lied</string>
+
+    <plurals name="song_count">
+        <item quantity="one">%1$d Lied</item>
+        <item quantity="other">%1$d Lieder</item>
+    </plurals>
+
+</resources>

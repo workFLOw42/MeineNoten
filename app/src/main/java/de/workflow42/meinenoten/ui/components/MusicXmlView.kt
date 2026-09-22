@@ -15,10 +15,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
+import de.workflow42.meinenoten.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -43,6 +45,12 @@ fun MusicXmlView(
     var errorMessage by remember(fileUri) { mutableStateOf<String?>(null) }
     var isRendering by remember(fileUri) { mutableStateOf(value = true) }
 
+    // Resolved up front: these are assigned from a background dispatcher and from the
+    // WebView callback, neither of which is a composable scope.
+    val readFailedMessage = stringResource(R.string.error_file_read_failed)
+    val unknownErrorMessage = stringResource(R.string.error_unknown)
+    val noScoreMessage = stringResource(R.string.error_no_score_in_mxl)
+
     LaunchedEffect(fileUri) {
         withContext(Dispatchers.IO) {
             try {
@@ -51,13 +59,17 @@ fun MusicXmlView(
                     context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 } else {
                     File(uri.path ?: "").takeIf { it.exists() }?.readBytes()
-                } ?: throw IllegalStateException("Datei konnte nicht gelesen werden")
+                } ?: throw IllegalStateException(readFailedMessage)
 
-                val text = if (isZip(bytes)) extractFromMxl(bytes) else bytes.toString(Charsets.UTF_8)
+                val text = if (isZip(bytes)) {
+                    extractFromMxl(bytes, noScoreMessage)
+                } else {
+                    bytes.toString(Charsets.UTF_8)
+                }
                 withContext(Dispatchers.Main) { xmlContent = text }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    errorMessage = e.message ?: "Unbekannter Fehler"
+                    errorMessage = e.message ?: unknownErrorMessage
                     isRendering = false
                 }
             }
@@ -151,8 +163,13 @@ fun MusicXmlView(
 private fun isZip(bytes: ByteArray): Boolean =
     (bytes.size > 4) && (bytes[0] == 0x50.toByte()) && (bytes[1] == 0x4B.toByte())
 
-/** Extracts the score from a compressed MusicXML (.mxl) container. */
-private fun extractFromMxl(bytes: ByteArray): String {
+/**
+ * Extracts the score from a compressed MusicXML (.mxl) container.
+ *
+ * [notFoundMessage] is passed in because this runs off the main thread with no composable
+ * scope to resolve it from.
+ */
+private fun extractFromMxl(bytes: ByteArray, notFoundMessage: String): String {
     ZipInputStream(bytes.inputStream()).use { zip ->
         var entry = zip.nextEntry
         while (entry != null) {
@@ -165,5 +182,5 @@ private fun extractFromMxl(bytes: ByteArray): String {
             entry = zip.nextEntry
         }
     }
-    throw IllegalStateException("Keine Notendatei im MXL-Archiv gefunden")
+    throw IllegalStateException(notFoundMessage)
 }

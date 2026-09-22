@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -28,7 +29,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.data.SongRepository
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
@@ -37,6 +40,7 @@ import de.workflow42.meinenoten.ui.components.DateField
 import de.workflow42.meinenoten.ui.components.DeleteSongDialog
 import de.workflow42.meinenoten.ui.components.EditSongDialog
 import de.workflow42.meinenoten.ui.components.GenreChips
+import de.workflow42.meinenoten.ui.components.InputDialogProperties
 import de.workflow42.meinenoten.ui.components.PdfPreloader
 import de.workflow42.meinenoten.ui.components.SetlistStrip
 import de.workflow42.meinenoten.ui.screens.SetlistDetailScreen
@@ -90,7 +94,7 @@ sealed interface AppRoute : NavKey {
 }
 
 fun getCleanFileName(context: Context, uri: Uri): String {
-    var fileName = "New Song"
+    var fileName = context.getString(R.string.default_song_title)
     context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
         val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
         if (cursor.moveToFirst()) {
@@ -211,31 +215,33 @@ fun MainApp() {
     if (showImportDialog) {
         AlertDialog(
             onDismissRequest = { showImportDialog = false },
-            title = { Text("Import Song (PDF/MusicXML)") },
+            modifier = Modifier.imePadding().padding(horizontal = 16.dp, vertical = 24.dp),
+            properties = InputDialogProperties,
+            title = { Text(stringResource(R.string.dialog_import_song_title)) },
             text = {
-                Column {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     TextField(
                         value = newSongTitle,
                         onValueChange = { newSongTitle = it },
-                        label = { Text("Title") },
+                        label = { Text(stringResource(R.string.label_title)) },
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                     )
                     TextField(
                         value = newSongArtist,
                         onValueChange = { newSongArtist = it },
-                        label = { Text("Artist") },
+                        label = { Text(stringResource(R.string.label_artist)) },
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                     )
                     TextField(
                         value = newSongVersion,
                         onValueChange = { newSongVersion = it },
-                        label = { Text("Version") },
+                        label = { Text(stringResource(R.string.label_version)) },
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                     )
                     TextField(
                         value = newSongGenre,
                         onValueChange = { newSongGenre = it },
-                        label = { Text("Genre") },
+                        label = { Text(stringResource(R.string.label_genre)) },
                         singleLine = true,
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                     )
@@ -271,12 +277,12 @@ fun MainApp() {
                         showImportDialog = false
                     },
                 ) {
-                    Text("Import")
+                    Text(stringResource(R.string.action_import))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showImportDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -285,31 +291,33 @@ fun MainApp() {
     if (showAddManualSongDialog) {
         AlertDialog(
             onDismissRequest = { showAddManualSongDialog = false },
-            title = { Text("Add Song (Manual)") },
+            modifier = Modifier.imePadding().padding(horizontal = 16.dp, vertical = 24.dp),
+            properties = InputDialogProperties,
+            title = { Text(stringResource(R.string.dialog_add_song_title)) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     TextField(
                         value = newSongTitle,
                         onValueChange = { newSongTitle = it },
-                        label = { Text("Title") },
+                        label = { Text(stringResource(R.string.label_title)) },
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                     )
                     TextField(
                         value = newSongArtist,
                         onValueChange = { newSongArtist = it },
-                        label = { Text("Artist") },
+                        label = { Text(stringResource(R.string.label_artist)) },
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                     )
                     TextField(
                         value = newSongVersion,
                         onValueChange = { newSongVersion = it },
-                        label = { Text("Version") },
+                        label = { Text(stringResource(R.string.label_version)) },
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                     )
                     TextField(
                         value = newSongGenre,
                         onValueChange = { newSongGenre = it },
-                        label = { Text("Genre") },
+                        label = { Text(stringResource(R.string.label_genre)) },
                         singleLine = true,
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                     )
@@ -321,7 +329,7 @@ fun MainApp() {
                     TextField(
                         value = newSongLyrics,
                         onValueChange = { newSongLyrics = it },
-                        label = { Text("Liedtext / Akkorde") },
+                        label = { Text(stringResource(R.string.label_lyrics)) },
                         modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
                         minLines = 5,
                     )
@@ -353,15 +361,33 @@ fun MainApp() {
                         }
                     },
                 ) {
-                    Text("Add")
+                    Text(stringResource(R.string.action_add))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showAddManualSongDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
+    }
+
+    /**
+     * Records that [songId] was just opened, for the "recently opened" ordering.
+     *
+     * Called from every route that opens a song – library, setlist, and the jump strip –
+     * because someone looking for the song they just played does not think about how they
+     * got to it.
+     *
+     * Unlike the setlist's resume position this belongs to the song itself, so it is saved
+     * here rather than on the setlist.
+     */
+    fun markSongOpened(songId: String) {
+        val idx = songs.indexOfFirst { it.id == songId }
+        if (idx != -1) {
+            songs[idx] = songs[idx].copy(lastOpenedAt = System.currentTimeMillis())
+            repository.saveSongs(songs)
+        }
     }
 
     // Shared by the list and the detail screen so a song always disappears from disk,
@@ -433,11 +459,13 @@ fun MainApp() {
         val songToAdd = showAddToSetlistDialog!!
         AlertDialog(
             onDismissRequest = { showAddToSetlistDialog = null },
-            title = { Text("Add to Setlist") },
+            title = { Text(stringResource(R.string.dialog_add_to_setlist_title)) },
             text = {
                 Column {
                     ListItem(
-                        headlineContent = { Text("Create new setlist...") },
+                        headlineContent = {
+                            Text(stringResource(R.string.action_create_new_setlist))
+                        },
                         leadingContent = { Icon(Icons.Default.Add, contentDescription = null) },
                         modifier = Modifier.clickable {
                             showAddToSetlistDialog = null
@@ -464,7 +492,7 @@ fun MainApp() {
                         }
                     } else {
                         Text(
-                            text = "No setlists available yet.",
+                            text = stringResource(R.string.empty_no_setlists_available),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(16.dp),
                         )
@@ -474,7 +502,7 @@ fun MainApp() {
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showAddToSetlistDialog = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -483,13 +511,15 @@ fun MainApp() {
     if (showCreateSetlistDialog) {
         AlertDialog(
             onDismissRequest = { showCreateSetlistDialog = false },
-            title = { Text("New Setlist") },
+            modifier = Modifier.imePadding().padding(horizontal = 16.dp, vertical = 24.dp),
+            properties = InputDialogProperties,
+            title = { Text(stringResource(R.string.dialog_new_setlist_title)) },
             text = {
-                Column {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     TextField(
                         value = newSetlistTitle,
                         onValueChange = { newSetlistTitle = it },
-                        label = { Text("Setlist Title") },
+                        label = { Text(stringResource(R.string.label_setlist_title)) },
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     DateField(
@@ -500,7 +530,7 @@ fun MainApp() {
                     TextField(
                         value = newSetlistNotes,
                         onValueChange = { newSetlistNotes = it },
-                        label = { Text("Notes") },
+                        label = { Text(stringResource(R.string.label_notes)) },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 2,
                     )
@@ -526,12 +556,12 @@ fun MainApp() {
                         }
                     },
                 ) {
-                    Text("Create")
+                    Text(stringResource(R.string.action_create))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCreateSetlistDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -542,7 +572,7 @@ fun MainApp() {
             metadata = ListDetailSceneStrategy.listPane(
                 detailPlaceholder = {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Select a song")
+                        Text(stringResource(R.string.empty_select_song))
                     }
                 },
             ),
@@ -551,6 +581,7 @@ fun MainApp() {
                 songs = songs,
                 setlists = setlists,
                 onSongClick = { song, filterSetlistId ->
+                    markSongOpened(song.id)
                     navigator.navigate(
                         AppRoute.SongDetail(
                             songId = song.id,
@@ -575,7 +606,7 @@ fun MainApp() {
             metadata = ListDetailSceneStrategy.listPane(
                 detailPlaceholder = {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Select a setlist")
+                        Text(stringResource(R.string.empty_select_setlist))
                     }
                 }
             )
@@ -700,6 +731,7 @@ fun MainApp() {
                     setlist = setlist,
                     songs = songs,
                     onSongClick = {
+                        markSongOpened(it.id)
                         // Pass the setlist along so paging can cross song boundaries.
                         // Tapping a specific song starts it from the top: the song was
                         // just announced, so its first page is what is wanted.
@@ -712,6 +744,7 @@ fun MainApp() {
                         )
                     },
                     onResume = { songId, page ->
+                        markSongOpened(songId)
                         navigator.navigate(
                             AppRoute.SongDetail(
                                 songId = songId,
@@ -728,6 +761,7 @@ fun MainApp() {
                             setlists[idx] = setlists[idx].copy(lastSongId = null, lastPage = 0)
                             repository.saveSetlists(setlists)
                         }
+                        markSongOpened(firstSong.id)
                         navigator.navigate(
                             AppRoute.SongDetail(
                                 songId = firstSong.id,
@@ -764,6 +798,11 @@ fun MainApp() {
         } ?: emptyList()
     }
 
+    // Counts in the labels, so the size of the library is visible without opening it and
+    // an active filter is obvious from the mismatch with the list below.
+    val songsLabel = "Songs (${songs.size})"
+    val setlistsLabel = "Setlists (${setlists.size})"
+
     val adaptiveInfo = currentWindowAdaptiveInfoV2()
     val navigationSuiteType = NavigationSuiteScaffoldDefaults.navigationSuiteType(adaptiveInfo)
 
@@ -785,14 +824,14 @@ fun MainApp() {
                             selected = navigationState.topLevelRoute == AppRoute.Songs,
                             onClick = { navigator.navigate(AppRoute.Songs) },
                             icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
-                            label = { Text("Songs") },
+                            label = { Text(songsLabel) },
                             navigationSuiteType = navigationSuiteType
                         )
                         NavigationSuiteItem(
                             selected = navigationState.topLevelRoute == AppRoute.Setlists,
                             onClick = { navigator.navigate(AppRoute.Setlists) },
                             icon = { Icon(Icons.Default.Menu, null) },
-                            label = { Text("Setlists") },
+                            label = { Text(setlistsLabel) },
                             navigationSuiteType = navigationSuiteType
                         )
 
@@ -804,6 +843,7 @@ fun MainApp() {
                                 currentSongId = songRoute.songId,
                                 flashAlpha = flashAlpha.value,
                                 onSongClick = { target ->
+                                    markSongOpened(target.id)
                                     navigator.replace(
                                         AppRoute.SongDetail(
                                             songId = target.id,
@@ -828,14 +868,14 @@ fun MainApp() {
                         selected = navigationState.topLevelRoute == AppRoute.Songs,
                         onClick = { navigator.navigate(AppRoute.Songs) },
                         icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
-                        label = { Text("Songs") },
+                        label = { Text(stringResource(R.string.nav_songs)) },
                         navigationSuiteType = navigationSuiteType
                     )
                     NavigationSuiteItem(
                         selected = navigationState.topLevelRoute == AppRoute.Setlists,
                         onClick = { navigator.navigate(AppRoute.Setlists) },
                         icon = { Icon(Icons.Default.Menu, null) },
-                        label = { Text("Setlists") },
+                        label = { Text(stringResource(R.string.nav_setlists)) },
                         navigationSuiteType = navigationSuiteType
                     )
                 }

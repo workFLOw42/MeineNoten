@@ -33,6 +33,8 @@ data class Song(
      * carries it any more.
      */
     val lastPage: Int = 0,
+    /** Zoom and pan settings per page index. */
+    val pageViews: Map<Int, PageView> = emptyMap(),
     /**
      * Short memo shown as an overlay next to a score, e.g. "Capo 2", "DADGAD".
      *
@@ -48,6 +50,17 @@ data class Song(
      * typed. Songs without a file render this as their main content.
      */
     val lyrics: String = "",
+    /**
+     * When this song was last opened, as epoch millis; 0 means never.
+     *
+     * Drives the "recently opened" ordering. Every open counts, whether the song was
+     * picked from the library or reached through a setlist – someone looking for the song
+     * they just played does not think about how they got to it.
+     *
+     * Unlike the resume position this genuinely belongs to the song: "when did I last
+     * look at this" is a property of the song itself, not of one programme it sits in.
+     */
+    val lastOpenedAt: Long = 0,
 ) {
     val displayTitle: String
         get() = if (version.isNotBlank()) "$title - $version" else title
@@ -63,4 +76,25 @@ data class Song(
      */
     val sortKey: String
         get() = artist.ifBlank { title }
+
+    /**
+     * True when [query] appears in the title, artist, version or genre.
+     *
+     * Lives on the model so the search field and the list can never disagree about what
+     * counts as a match.
+     *
+     * Plain substring matching, case-insensitive but *not* accent-insensitive: "Fur"
+     * deliberately does not find "Für". Typing the umlaut is no effort on a German
+     * keyboard, and folding accents away would also make unrelated titles collide.
+     *
+     * A blank query matches everything, so callers can pass the field through unchecked.
+     */
+    fun matches(query: String): Boolean {
+        val needle = query.trim()
+        if (needle.isEmpty()) return true
+        return title.contains(needle, ignoreCase = true) ||
+            artist.contains(needle, ignoreCase = true) ||
+            version.contains(needle, ignoreCase = true) ||
+            genre.contains(needle, ignoreCase = true)
+    }
 }
