@@ -102,7 +102,8 @@ hinweg. Aus der Songliste geöffnet bleibt die Anzeige an den Liedgrenzen stehen
 | Pedal & Tasten | Lautstärketasten blättern, Richtung umkehren |
 | Anzeige | Bildschirm bleibt an, Zoom pro Seite merken, Design |
 
-Die Standardwerte entsprechen dem Verhalten vor Einführung der Einstellungen.
+Ab Werk ist alles eingeschaltet außer den beiden Umkehrungen (Tippzonen tauschen,
+Pedalrichtung). Die Tippzonen liegen im unteren Drittel, das Design folgt dem System.
 
 ## Technik
 

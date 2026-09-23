@@ -14,7 +14,7 @@ Seitenaufbau, keine Fehlbedienung durch versehentliches Antippen.
 
 ## 2. Aktueller Stand
 
-### Umgesetzt und auf dem Gerät verifiziert
+### Umgesetzt
 
 | Bereich | Funktion |
 |---|---|
@@ -42,24 +42,20 @@ Seitenaufbau, keine Fehlbedienung durch versehentliches Antippen.
 | Daten | Setlists durchsuchen (auch nach enthaltenen Liedern), nach Zeitraum filtern, drei Sortiermodi |
 | Daten | Setlists duplizieren, Lied entfernen mit Rückgängig |
 | Daten | Persistenz als JSON via kotlinx.serialization, Einstellungen via DataStore |
-| UI | Material 3, Navigationsmenü (Drawer) statt Leiste/Rail |
+| UI | Material 3, Navigationsmenü (Drawer) |
 | UI | Buchstabenleiste zum Springen in beiden Listen |
 | UI | Startbildschirm, nahtlos an den System-Splash anschließend |
 | UI | Deutsch und Englisch |
 | Auslieferung | Release-Build mit R8 verkleinert, signiert, Play-tauglich |
 | Auslieferung | Datenschutzerklärung über GitHub Pages veröffentlicht |
 
-### Verworfen
+### Bewusst nicht umgesetzt
 
-**On-Device OMR (Notenerkennung aus Scans).** War als Phase 2 geplant und existierte als
-`OmrWorker` – dieser hat jedoch nie Noten erkannt, sondern nach drei Sekunden Wartezeit
-„fertig" gemeldet. Eine Attrappe ohne Funktion.
-
-Die Begründung für den Verzicht: Verlässliche OMR braucht Modelle, die auf einem
-Tablet dieser Klasse nicht sinnvoll laufen. Die Erkennungsqualität bei fotografierten
-Scans ist zudem so schwankend, dass das Ergebnis vor dem Auftritt jedes Mal geprüft
-werden müsste – genau die Aufmerksamkeit, die die App einsparen soll. Ein falsch
-erkannter Takt im Gottesdienst ist schlimmer als ein Scan, der eben ein Scan ist.
+**On-Device OMR (Notenerkennung aus Scans).** Verlässliche OMR braucht Modelle, die auf
+einem Tablet dieser Klasse nicht sinnvoll laufen. Die Erkennungsqualität bei
+fotografierten Scans ist zudem so schwankend, dass das Ergebnis vor dem Auftritt jedes
+Mal geprüft werden müsste – genau die Aufmerksamkeit, die die App einsparen soll. Ein
+falsch erkannter Takt im Gottesdienst ist schlimmer als ein Scan, der eben ein Scan ist.
 
 MusicXML bleibt unterstützt, aber nur als **Import** bereits vorhandener Dateien.
 Wer digitale Noten hat, bekommt scharfe Vektordarstellung. Wer Scans hat, behält Scans.
@@ -71,25 +67,15 @@ Wer digitale Noten hat, bekommt scharfe Vektordarstellung. Wer Scans hat, behäl
 
 ### Offen
 
-**Automatisches Umblättern per Mikrofon.** Weiterhin die interessanteste Idee, aber
-unverändert schwierig: Ein Kirchenraum mit Chor, Orgel und Gemeindegesang ist akustisch
-keine Testumgebung. Ein Fehlauslöser mitten im Lied wäre schlimmer als gar keine
-Automatik. Bleibt Zukunftsvision, nicht eingeplant.
+**Automatisches Umblättern per Mikrofon.** Ein Kirchenraum mit Chor, Orgel und
+Gemeindegesang ist akustisch keine Testumgebung. Ein Fehlauslöser mitten im Lied wäre
+schlimmer als gar keine Automatik. Zukunftsvision, nicht eingeplant.
 
 **Ungenutzte Datenfelder.** `bpm`, `timeSignature` und `totalBars` werden gespeichert,
-aber nirgends verwendet. Sie waren Vorarbeit für den Rhythmus-Tracker. Entweder daraus
-ein einfaches Metronom bauen oder die Felder entfernen – Entscheidung steht aus.
+aber nirgends verwendet. Entweder daraus ein einfaches Metronom bauen oder die Felder
+entfernen – Entscheidung steht aus.
 
-### In Arbeit
-
-Die in früheren Fassungen hier gelisteten Punkte sind umgesetzt und in Abschnitt 3 und 4
-beschrieben. Offen bleibt nur:
-
-*   Konzertdatum über Datumsauswahl statt Freitext – `DateField` existiert, die einmalige
-    Deutung bestehender Freitext-Einträge ist noch nicht auf echten Daten geprüft.
-*   Entscheidung über `bpm`, `timeSignature`, `totalBars`: Metronom bauen oder Felder
-    entfernen.
-*   Abschnitt 5a (eigene Kompositionen) ist noch nicht ausgearbeitet.
+**Eigene Kompositionen** (Abschnitt 5a) sind noch nicht ausgearbeitet.
 
 ---
 
@@ -101,7 +87,7 @@ Die App wird über Google Play ausgeliefert. Was dafür eingerichtet ist:
 |---|---|
 | Signierung | eigener Keystore, Zugangsdaten in `local.properties` (nicht im Repo) |
 | `targetSdk` | 36 – Play-Mindestanforderung |
-| Verkleinerung | R8 aktiv, 14,64 MB → 5,24 MB |
+| Verkleinerung | R8 aktiv, 14,64 MB → 5,6 MB |
 | Quellcode | GitHub, `workFLOw42/MeineNoten` |
 | Datenschutzerklärung | `docs/privacy-policy.html` über GitHub Pages |
 | Store-Texte | Kurz- und Langbeschreibung liegen vor |
@@ -121,24 +107,20 @@ veröffentlicht wurde.
 | 5–10 | 1.1.1–1.1.6 | Setlist-Fortschritt, Zweisprachigkeit, Zoom pro Seite; 10 nicht hochgeladen |
 | 11 | 1.5.0 | Navigationsmenü, Einstellungen, Statusleiste, Design-Wahl, Startbildschirm |
 
-Seit 1.1.x steht die Nummer in `app/version.properties` und wird nach jedem
-erfolgreichen `:app:bundleRelease` automatisch erhöht. Die Datei gehört ins Repository,
-damit sich keine Nummer über Rechner oder Checkouts hinweg wiederholen kann.
+Die Nummer steht in `app/version.properties` und wird nach jedem erfolgreichen
+`:app:bundleRelease` automatisch erhöht. Die Datei gehört ins Repository, damit sich
+keine Nummer über Rechner oder Checkouts hinweg wiederholen kann.
 
 > [!IMPORTANT]
 > `compileSdk` steht auf 37 und muss dort bleiben, weil eine eingebundene
 > AndroidX-Abhängigkeit (`runtime-saveable`) das verlangt. Das ist unabhängig vom
 > `targetSdk` und für Play unproblematisch.
 
-### Erzwungenes Edge-to-Edge ab `targetSdk` 36
+### Edge-to-Edge ab `targetSdk` 36
 
-Ab API 36 lässt sich die randlose Darstellung nicht mehr abschalten; Inhalte laufen unter
-Status- und Navigationsleiste. Die App war darauf vorbereitet: `enableEdgeToEdge()` in
-`MainActivity`, und alle Screens geben das `innerPadding` ihres `Scaffold` weiter.
-
-In der Notenansicht bleibt die Statusleiste dauerhaft stehen und gibt ihr Padding immer
-weiter. Die frühere Ausnahme (Padding nur bei sichtbarer Bedienoberfläche) ist mit dem
-Aus-/Einblenden der Oberfläche entfallen.
+Ab API 36 lässt sich die randlose Darstellung nicht abschalten; Inhalte laufen unter
+Status- und Navigationsleiste. `enableEdgeToEdge()` in `MainActivity`, und alle Screens
+geben das `innerPadding` ihres `Scaffold` weiter – auch die Notenansicht.
 
 ---
 
@@ -146,8 +128,7 @@ Aus-/Einblenden der Oberfläche entfallen.
 
 ### Darstellung der Listen
 
-Beide Listen laufen **einspaltig untereinander**. Das bisherige Kachelraster
-(`LazyVerticalGrid`, zwei Spalten im Querformat) wird ersetzt.
+Beide Listen laufen **einspaltig untereinander**, kein Kachelraster.
 
 Begründung: In einem Raster muss das Auge zeilen- *und* spaltenweise suchen. Bei einer
 sortierten Liste genügt ein Blick von oben nach unten. Beim Suchen eines Liedes kurz
@@ -251,22 +232,17 @@ Im Setlist-Detail lassen sich Lieder per Pfeil verschieben und entfernen. Entfer
 fragt nicht nach, sondern bietet für einige Sekunden *Rückgängig* an – der Schritt ist
 billig umzukehren, eine Rückfrage wäre bei jedem Aufräumen lästig.
 
-> [!IMPORTANT]
-> Das Datumsfeld ist derzeit freier Text („Ostern", „24.12."). Danach lässt sich nicht
-> verlässlich sortieren. Deshalb wird die Eingabe auf eine **Datumsauswahl**
-> (`DatePicker`) umgestellt und intern als `yyyy-MM-dd` gespeichert.
->
-> Bereits vorhandene Freitext-Einträge werden beim Laden einmalig gedeutet
-> (`TT.MM.JJJJ`, `TT.MM.`, `yyyy-MM-dd`). Was sich nicht deuten lässt, bleibt als
-> Beschriftung erhalten und die Setlist wird wie „ohne Datum" behandelt – es gehen
-> also keine Eingaben verloren.
+Das Konzertdatum wird über eine **Datumsauswahl** (`DatePicker`) eingegeben und als
+`yyyy-MM-dd` gespeichert. Freitext-Einträge aus älteren Dateien (`TT.MM.JJJJ`, `TT.MM.`)
+werden beim Laden gedeutet; was sich nicht deuten lässt, bleibt als Beschriftung
+erhalten und die Setlist gilt als „ohne Datum“.
 
 ### Löschen von Liedern
 
-Im Bearbeiten-Dialog der Notenansicht, als drittes Feld neben *Speichern* und
-*Abbrechen*. Absichtlich **nicht** in der Liste: Ein Wischen oder Langdruck in der
-Liste wäre auf einem Tablet, das man mit der Gitarre in der Hand bedient, zu leicht
-versehentlich ausgelöst.
+Über das Menü am Lied (drei Punkte in der Songliste, Navigationsmenü in der
+Notenansicht), als letzter, rot abgesetzter Eintrag. Absichtlich **keine** Wischgeste
+und kein Langdruck: Auf einem Tablet, das man mit der Gitarre in der Hand bedient, wären
+die zu leicht versehentlich ausgelöst.
 
 Gelöscht werden:
 
@@ -292,9 +268,9 @@ durch. Deshalb:
 Damit funktioniert das Pedal über die gesamte Setlist hinweg, ohne dass man zwischen
 zwei Liedern zum Tablet greifen muss.
 
-Der Liedwechsel wird deutlicher zurückgemeldet als ein Seitenwechsel (längerer Blitz
-plus kurze Einblendung des neuen Titels), damit man nicht versehentlich ein Lied
-weiterrutscht und es erst beim Anspielen merkt.
+Der Liedwechsel wird deutlicher zurückgemeldet als ein Seitenwechsel (kurze Einblendung
+des neuen Titels), damit man nicht versehentlich ein Lied weiterrutscht und es erst beim
+Anspielen merkt. Auf der letzten Seite kündigt ⏭ in der Statusleiste den Wechsel an.
 
 > [!NOTE]
 > Nur wirksam, wenn das Lied **aus einer Setlist heraus** geöffnet wurde. Aus der
@@ -308,21 +284,14 @@ Lied-Aktionen die ganze Reihenfolge („4. Großer Gott, wir loben dich“). Ein
 das betreffende Lied, immer auf Seite 1; das aktuelle ist markiert.
 
 Zweck: In einem Gottesdienst wird die Reihenfolge oft spontan geändert oder ein Lied
-übersprungen. Ohne Sprungliste heißt das: zurück zur Setlist, suchen, öffnen.
-
-> [!NOTE]
-> Bis 1.1.x war das eine **Sprungleiste** aus Positionsnummern – senkrecht in der
-> Navigationsschiene, auf dem Telefon waagerecht über den Noten. Mit dem Wechsel auf ein
-> Navigationsmenü gibt es keine Schiene mehr, und die waagerechte Leiste kostete
-> Notenhöhe. Im Menü stehen Titel statt bloßer Nummern, was bei spontanen Änderungen
-> schneller zu lesen ist. `SetlistStrip.kt` ist seitdem ungenutzt.
+übersprungen. Ohne Sprungliste heißt das: zurück zur Setlist, suchen, öffnen. Titel
+statt bloßer Positionsnummern sind bei spontanen Änderungen schneller zu lesen.
 
 ### Navigationsmenü
 
 Songliste, Setlists und Einstellungen liegen in einem **Drawer** hinter dem Menüsymbol
-oben links, nicht mehr in Leiste oder Schiene. Die Notenansicht trägt so außer ihrer
-Statusleiste keine dauerhafte Bedienfläche, und das Menü ist auf Telefon und Tablet
-gleich.
+oben links. Die Notenansicht trägt so außer ihrer Statusleiste keine dauerhafte
+Bedienfläche, und das Menü ist auf Telefon und Tablet gleich.
 
 Bei geöffnetem Lied enthält es zusätzlich *Bearbeiten*, *Zur Setlist hinzufügen*,
 *Liedtext/Noten anzeigen* (nur wenn beides vorhanden) und *Löschen*. Abschnitte ohne
@@ -343,10 +312,9 @@ bleibt:
 Jeder Teil lässt sich in den Einstellungen abschalten. Bleibt nur der Titel übrig,
 rückt er in die erste Zeile und wird größer, damit keine leere Zeile stehen bleibt.
 
-> [!IMPORTANT]
-> Früher ließ sich die Oberfläche mit einem Tipp in die Bildmitte ausblenden. Das ist
-> entfallen: Die Statusleiste zeigt genau das, was beim Spielen gebraucht wird, und ein
-> versehentlicher Tipp versteckte bisher ausgerechnet diese Information.
+Die Statusleiste lässt sich bewusst nicht ausblenden: Sie zeigt genau das, was beim
+Spielen gebraucht wird, und ein versehentlicher Tipp dürfte ausgerechnet diese
+Information nicht verstecken.
 
 ### Startseite beim Öffnen
 
@@ -397,8 +365,8 @@ Zu den Tippzonen: Sie liegen im **unteren Drittel** (einstellbar: untere Hälfte
 Höhe), links zurück, rechts vor, auf Wunsch getauscht. Der obere Bereich bleibt frei für
 Zoomen und Verschieben, wo versehentliche Berührungen passieren.
 
-**Wischen blättert nicht mehr um.** Es kollidierte mit dem Verschieben einer gezoomten
-Seite – wer eine Zeile ins Bild zieht, will nicht umblättern. Aus demselben Grund gibt
+**Wischen blättert nicht um.** Es käme dem Verschieben einer gezoomten Seite in die
+Quere – wer eine Zeile ins Bild zieht, will nicht umblättern. Aus demselben Grund gibt
 es keinen Doppeltipp-Zoom: Ein Doppeltipp-Detektor muss jeden einzelnen Tipp rund
 300 ms zurückhalten, was die Tippzonen träge machen würde.
 
@@ -423,14 +391,9 @@ im Zweifel ein zweites Mal und ist zwei Seiten zu weit.
 
 Die Rückmeldung ist ein **Randblitz**: ein 6 dp breiter grüner Rahmen um die
 Notenfläche. Er hängt nicht an einer Setlist und wirkt deshalb auch beim Üben eines
-einzelnen Liedes. Abschaltbar in den Einstellungen.
-
-> [!NOTE]
-> Zuerst war es ein grüner Schleier über den **ganzen** Bildschirm. Verworfen, weil er
-> die Noten genau in dem Moment überlagerte, in dem sie gebraucht werden. Die Breite von
-> 6 dp ist der Kompromiss: im peripheren Blickfeld erkennbar, ohne je eine Notenzeile zu
-> verdecken. Der frühere zweite Teil, ein Aufhellen der Sprungleisten-Kachel, ist mit
-> der Sprungleiste entfallen.
+einzelnen Liedes. Abschaltbar in den Einstellungen. Bewusst nur ein Rahmen und kein
+Schleier über den ganzen Bildschirm: Die 6 dp sind im peripheren Blickfeld erkennbar,
+ohne je eine Notenzeile zu verdecken – genau in dem Moment, in dem sie gebraucht wird.
 
 Der Liedwechsel ist der größere Sprung und wird deshalb zusätzlich benannt – der Titel
 des neuen Liedes erscheint für 1,5 Sekunden in der Bildmitte (ebenfalls abschaltbar).
@@ -455,7 +418,7 @@ data class Song(
     val bpm: Int = 120,              // derzeit ungenutzt
     val timeSignature: String = "4/4",  // derzeit ungenutzt
     val totalBars: Int = 0,          // derzeit ungenutzt
-    val lastPage: Int = 0,           // nicht mehr geschrieben, nur noch gelesen
+    val lastPage: Int = 0,           // Altfeld, wird nur noch gelesen
     val pageViews: Map<Int, PageView> = emptyMap(),  // Zoom/Ausschnitt pro Seite
     val notes: String = "",          // kurze Notiz neben den Noten ("Capo 2")
     val lyrics: String = "",         // Liedtext/Akkorde, unabhängig von fileUri
@@ -479,21 +442,18 @@ data class Setlist(
 ```
 
 Einstellungen liegen **nicht** in diesen JSON-Dateien, sondern als `AppSettings` in
-Preferences-DataStore. Sie sind Gerätevorlieben, keine Notendaten. Alle Standardwerte
-entsprechen dem Verhalten vor Einführung der Einstellungen, ein Update ändert also
-nichts, solange nichts umgestellt wird.
+Preferences-DataStore. Sie sind Gerätevorlieben, keine Notendaten.
 
-### Änderung am Datumsfeld
+### Datumsfeld
 
-`Setlist.date` bleibt technisch ein `String`, wird aber künftig ausschließlich im
-Format `yyyy-MM-dd` geschrieben. Gründe für diese Wahl statt eines Zeitstempels:
+`Setlist.date` ist technisch ein `String` im Format `yyyy-MM-dd`. Gründe für diese Wahl
+statt eines Zeitstempels:
 
 *   Bestehende JSON-Dateien bleiben lesbar, keine Migration der Struktur nötig.
 *   Das Format sortiert sich als Zeichenkette von selbst richtig.
 *   Ein Datum ohne Uhrzeit ist hier das fachlich Richtige – ein Konzert hat einen Tag.
 
-Angezeigt wird weiterhin deutsch (`TT.MM.JJJJ`); die Umwandlung passiert nur in der
-Oberfläche.
+Angezeigt wird als `TT.MM.JJJJ`; die Umwandlung passiert nur in der Oberfläche.
 
 ### Genre
 
@@ -564,8 +524,8 @@ ließen sich nicht öffnen.
 ### Fehlerbehandlung
 
 Beide Anzeigen melden Probleme im Klartext auf dem Bildschirm – lesbare Datei fehlt,
-Seite außerhalb des Bereichs, MusicXML nicht interpretierbar. Vorher blieb die Fläche
-in solchen Fällen weiß, was während einer Probe nicht diagnostizierbar ist.
+Seite außerhalb des Bereichs, MusicXML nicht interpretierbar. Eine weiße Fläche wäre
+während einer Probe nicht diagnostizierbar.
 
 ### Display-Management
 
@@ -598,8 +558,8 @@ die Reihenfolge der Sammlung nicht mit der Gerätesprache springt.
 sortiert Kotlin nach Unicode-Position, wodurch „Über" hinter „Z" landet und
 Großschreibung die Reihenfolge beeinflusst.
 
-Sortiert wird in der Oberfläche, nicht in der Speicherung. Die JSON-Datei behandelt
-weiter die Einfügereihenfolge – die Anzeige leitet ihre Reihenfolge jedes Mal neu ab
+Sortiert wird in der Oberfläche, nicht in der Speicherung. Die JSON-Datei behält
+die Einfügereihenfolge – die Anzeige leitet ihre Reihenfolge jedes Mal neu ab
 (`remember` auf der Liste). Damit gibt es keinen Zustand, der auseinanderlaufen kann.
 
 ### Verkleinerung des Release-Builds (R8)
@@ -610,7 +570,7 @@ Adaptive- und Navigation3-Bibliotheken nutzt:
 
 | | ohne R8 | mit R8 |
 |---|---|---|
-| AAB | 14,64 MB | **5,18 MB** |
+| AAB | 14,64 MB | **5,6 MB** |
 | APK | – | 2,81 MB |
 | DEX | ~50 MB in 3 Dateien | 2,7 MB in 1 Datei |
 
@@ -623,7 +583,7 @@ Zwei Stellen der App sind für R8 nicht analysierbar und brauchen zwingend Keep-
     MusicXML-Anzeige bliebe dann im Ladezustand hängen.
 2.  **Die Datenmodelle.** `Song`, `Setlist` und `SongSource` werden als JSON persistiert.
     Würde R8 deren Felder umbenennen, ließen sich bestehende `songs.json` und
-    `setlists.json` nicht mehr lesen – ein stiller Datenverlust bei vorhandenen Nutzern.
+    `setlists.json` nicht lesen – ein stiller Datenverlust bei vorhandenen Nutzern.
 
 > [!WARNING]
 > Diese Regeln sind nicht optional und dürfen nicht „aufgeräumt" werden. Ihr Fehlen
@@ -665,7 +625,7 @@ app/src/main/
         │   ├── AlphabetIndex.kt   Buchstabenleiste zum Springen
         │   ├── SongActions.kt     Menü, Bearbeiten- und Löschen-Dialog
         │   ├── VersionFooter.kt   Versionszeile
-        │   ├── SetlistStrip.kt    frühere Sprungleiste, derzeit ungenutzt
+        │   ├── SetlistStrip.kt    ungenutzt, kann entfernt werden
         │   ├── GenreChips.kt      Vorschläge vergebener Genres
         │   └── DateField.kt       Datumsauswahl
         ├── util/
@@ -681,74 +641,14 @@ app/src/main/
 ```
 
 > [!NOTE]
-> Das Setlist-Detail liegt zusammen mit der Übersicht in `SetlistScreen.kt`, es gibt
-> keine separate `SetlistDetailScreen.kt`. Der Paketpfad ist `de.workflow42.meinenoten`
-> (früher `com.example.meinenoten`).
+> Das Setlist-Detail liegt zusammen mit der Übersicht in `SetlistScreen.kt`. Der
+> Paketpfad ist `de.workflow42.meinenoten`.
 
 ---
 
 ## 8. Prüfstand
 
-| Was | Wie geprüft | Ergebnis |
-|---|---|---|
-| Übersetzen | `:app:assembleDebug` | erfolgreich |
-| Installation | Emulator (Tab S6 Lite, 1200×2000) | erfolgreich |
-| Blättern per Tippzone | linke Hälfte unten | Seite wechselt zurück |
-| Seitenzähler | Statusleiste | zeigt korrekt „Seite 1/2“ |
-| Laufzeitfehler | Logcat | keine Fehler, keine Abstürze |
-
-### Prüfung des verkleinerten Release-Builds
-
-R8-Fehler treten grundsätzlich nur im Release-Build auf, deshalb separat geprüft:
-
-| Was | Wie geprüft | Ergebnis |
-|---|---|---|
-| `targetSdk` | gemergtes Manifest gelesen | `targetSdkVersion="36"` |
-| `versionCode` | gemergtes Manifest gelesen | `versionCode="3"` |
-| Signatur | `jarsigner -verify` | „JAR-Datei verifiziert." |
-| Modelle behalten | `mapping.txt` | `Song`, `Setlist`, `SongSource` unverändert |
-| Feldnamen behalten | `mapping.txt` | `getArtist -> getArtist` usw. |
-| JS-Brücke behalten | `seeds.txt` | `onStatus(String, String)` enthalten |
-| Start | Release-APK auf Emulator | läuft, keine `ClassNotFound` |
-| Oberfläche | Sichtprüfung | Navigation und Liste korrekt |
-| Schreiben von JSON | Lied angelegt | erscheint in der Liste |
-| **Lesen von JSON** | App neu gestartet | Lied weiterhin vorhanden |
-
-Der letzte Punkt ist der wichtigste: Er belegt, dass die Keep-Rules greifen und
-bestehende Datenbestände nach dem Umstieg auf R8 lesbar bleiben.
-
-### Stand von Version 1.1.0 (`versionCode` 4)
-
-| Was | Wie geprüft | Ergebnis |
-|---|---|---|
-| Übersetzen | `:app:assembleDebug` | erfolgreich |
-| Release-Bundle | `:app:bundleRelease` | erfolgreich, 5,24 MB |
-| Genre überlebt R8 | `mapping.txt` | `getGenre() -> getGenre`, unverändert |
-
-> [!WARNING]
-> **Die Oberfläche von 1.1.0 ist noch nicht auf einem Gerät gesehen.** Übersetzen und
-> Mapping belegen nur, dass der Code baut und die Serialisierung hält. Offen sind
-> insbesondere:
->
-> *   die waagerechte Sprungleiste in beiden Ausrichtungen – sie liegt innerhalb der
->     Tipp-Zone zum Blättern, die Abgrenzung ist nur theoretisch geprüft;
-> *   der Randblitz bei 6 dp Breite – ob er im peripheren Blickfeld wirklich auffällt,
->     lässt sich nur am Gerät beurteilen;
-> *   die Filterleiste auf schmalem Bildschirm, wenn viele Genres vergeben sind.
-
-> [!WARNING]
-> **Nicht auf echter Hardware geprüft:** Das Bluetooth-Pedal lässt sich im Emulator
-> nicht simulieren. Die Tastencodes sind nach bestem Wissen breit abgedeckt, der
-> Nachweis mit einem echten Gerät fehlt aber. Bei Problemen zeigt Logcat, welchen
-> Code das Pedal tatsächlich sendet.
-
-> [!WARNING]
-> **MusicXML im Release-Build nicht geprüft.** Für die Anzeige fehlte eine Testdatei.
-> Die Keep-Rule für `@JavascriptInterface` ist über `seeds.txt` nachgewiesen, die
-> tatsächliche Darstellung im verkleinerten Build wurde aber nicht gesehen. Das sollte
-> mit einer `.musicxml`-Datei nachgeholt werden.
-
-### Stand von Version 1.5.0 (`versionCode` 11)
+Stand 1.5.0 (`versionCode` 11):
 
 | Was | Wie geprüft | Ergebnis |
 |---|---|---|
@@ -757,15 +657,43 @@ bestehende Datenbestände nach dem Umstieg auf R8 lesbar bleiben.
 | Signatur | `jarsigner -verify` | „JAR verifiziert“ |
 | Versionszähler | `version.properties` | nach dem Build auf 12 / 1.5.1 erhöht |
 
-> [!WARNING]
-> Die neuen Felder (`lastPlayedAt`, `pageViews`, `lyrics`, `lastOpenedAt`) fallen unter
-> die bestehende Keep-Rule für die Modelle. Der Nachweis über `mapping.txt` und ein
-> Neustart des Release-Builds mit vorhandenen Daten sollte für 1.5.0 wiederholt werden,
-> ebenso ein Update von 1.1.x mit bestehender `songs.json`.
-
-Automatisierte Tests decken inzwischen reine Logik ab: Gruppierung und Sortierung der
-Songliste (`SongListGroupingTest`), Suche, Zeitraum und Sortierung der Setlists
+Die Unit-Tests decken reine Logik ab: Gruppierung und Sortierung der Songliste
+(`SongListGroupingTest`), Suche, Zeitraum und Sortierung der Setlists
 (`SetlistListTest`) sowie Zoom-Daten und Rückwärtskompatibilität alter JSON-Dateien
-(`SongZoomAndBackwardCompatibilityTest`). Noch ohne Tests sind die Dateityp-Erkennung
-im Repository und das Entpacken von `.mxl`.
+(`SongZoomAndBackwardCompatibilityTest`). Ohne Tests sind die Dateityp-Erkennung im
+Repository und das Entpacken von `.mxl`.
+
+### Prüfung eines Release-Builds
+
+R8-Fehler treten nur im Release-Build auf. Vor jedem Upload deshalb:
+
+| Was | Wie prüfen | Erwartet |
+|---|---|---|
+| `targetSdk`, `versionCode` | gemergtes Manifest | 36, neuer Code |
+| Signatur | `jarsigner -verify` | „JAR verifiziert“ |
+| Modelle behalten | `mapping.txt` | `Song`, `Setlist`, `SongSource`, `PageView` unverändert |
+| Feldnamen behalten | `mapping.txt` | `getArtist -> getArtist` usw. |
+| JS-Brücke behalten | `seeds.txt` | `onStatus(String, String)` enthalten |
+| Start | Release-APK auf Gerät | läuft, keine `ClassNotFound` |
+| **Lesen von JSON** | Lied anlegen, App neu starten | Lied weiterhin vorhanden |
+| Update | über die Vorversion installieren | bestehende Daten lesbar |
+
+Der Lese-Test ist der wichtigste: Er belegt, dass die Keep-Rules greifen und bestehende
+Datenbestände lesbar bleiben.
+
+> [!WARNING]
+> **Für 1.5.0 noch offen:** `mapping.txt` für die neuen Felder (`lastPlayedAt`,
+> `pageViews`, `lyrics`, `lastOpenedAt`), Neustart des Release-Builds mit vorhandenen
+> Daten und ein Update über die Vorversion.
+
+> [!WARNING]
+> **Nicht auf echter Hardware geprüft:** Das Bluetooth-Pedal lässt sich im Emulator
+> nicht simulieren. Die Tastencodes sind breit abgedeckt, der Nachweis mit einem echten
+> Gerät fehlt. Bei Problemen zeigt Logcat, welchen Code das Pedal tatsächlich sendet.
+
+> [!WARNING]
+> **MusicXML im Release-Build nicht gesehen.** Die Keep-Rule für `@JavascriptInterface`
+> ist über `seeds.txt` nachgewiesen, die Darstellung im verkleinerten Build aber nicht.
+> Mit einer `.musicxml`-Datei nachholen.
+
 
