@@ -23,7 +23,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -174,6 +173,12 @@ fun PdfView(
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(fileUri, currentPage) {
+                        // No double-tap zoom on purpose: a double-tap detector has to hold
+                        // back every single tap for ~300 ms to rule out a second one, which
+                        // would make the parent's page-turn tap zones feel sluggish.
+                        //
+                        // Events are only consumed while actually zooming or panning, so a
+                        // plain tap (and any tap at scale 1) still reaches the tap zones.
                         awaitPointerEventScope {
                             while (true) {
                                 val event = awaitPointerEvent()
@@ -207,22 +212,6 @@ fun PdfView(
                                 }
                             }
                         }
-                    }
-                    .pointerInput(fileUri, currentPage) {
-                        detectTapGestures(
-                            onDoubleTap = {
-                                if (scale > 1.1f) {
-                                    scale = 1f
-                                    offsetXRatio = 0f
-                                    offsetYRatio = 0f
-                                } else {
-                                    scale = 2f
-                                    offsetXRatio = 0f
-                                    offsetYRatio = 0f
-                                }
-                                onPageViewChange(PageView(scale, offsetXRatio, offsetYRatio))
-                            }
-                        )
                     }
                     .graphicsLayer {
                         scaleX = scale

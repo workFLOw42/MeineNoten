@@ -1,5 +1,14 @@
 package de.workflow42.meinenoten.ui
 
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.automirrored.filled.Subject
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.layout.height
+import de.workflow42.meinenoten.ui.screens.SettingsScreen
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import android.content.Context
@@ -32,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import de.workflow42.meinenoten.R
+import de.workflow42.meinenoten.data.AppSettings
 import de.workflow42.meinenoten.data.SongRepository
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
@@ -70,6 +80,7 @@ import kotlinx.serialization.Serializable
 sealed interface AppRoute : NavKey {
     @Serializable data object Songs : AppRoute
     @Serializable data object Setlists : AppRoute
+    @Serializable data object Settings : AppRoute
 
     /**
      * [setlistId] is set when the song was opened from a setlist. It enables advancing
@@ -107,15 +118,25 @@ fun getCleanFileName(context: Context, uri: Uri): String {
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun MainApp() {
+fun MainApp(
+    // Hoisted to MainActivity, which also needs them for the theme; defaults keep previews simple.
+    settings: AppSettings = AppSettings(),
+    onSettingsChange: (AppSettings) -> Unit = {},
+) {
     val context = LocalContext.current
     val repository = remember { SongRepository(context) }
     
     val navigationState = rememberNavigationState(
         startRoute = AppRoute.Songs,
-        topLevelRoutes = setOf(AppRoute.Songs, AppRoute.Setlists),
+        topLevelRoutes = setOf(AppRoute.Songs, AppRoute.Setlists, AppRoute.Settings),
     )
     val navigator = remember { Navigator(navigationState) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
+    val openDrawer: () -> Unit = { drawerScope.launch { drawerState.open() } }
+    // Lyrics/score toggle of the open song. Lives here because the switch sits in the
+    // drawer; keyed per song so each one opens in its default view.
+    var lyricsSongId by remember { mutableStateOf<String?>(null) }
     
     val listDetailStrategy = rememberListDetailSceneStrategy<NavKey>()
     
@@ -125,15 +146,6 @@ fun MainApp() {
 
     val setlists = remember {
         mutableStateListOf<Setlist>()
-    }
-
-    val flashAlpha = remember { Animatable(0f) }
-    var lastPageTurnTime by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(lastPageTurnTime) {
-        if (lastPageTurnTime > 0) {
-            flashAlpha.animateTo(0.2f, animationSpec = tween(50))
-            flashAlpha.animateTo(0f, animationSpec = tween(500))
-        }
     }
 
     LaunchedEffect(Unit) {
@@ -164,6 +176,10 @@ fun MainApp() {
     var newSetlistTitle by remember { mutableStateOf("") }
     var newSetlistDate by remember { mutableStateOf("") }
     var newSetlistNotes by remember { mutableStateOf("") }
+    // Set while the setlist dialog edits an existing programme instead of creating one.
+    // The dialog is shared so both paths offer exactly the same fields.
+    var setlistToEdit by remember { mutableStateOf<Setlist?>(null) }
+    var setlistToDelete by remember { mutableStateOf<Setlist?>(null) }
 
     // Edit and delete are reachable from the song list as well, so the dialogs live here
     // next to the repository instead of inside either screen.
@@ -390,6 +406,64 @@ fun MainApp() {
         }
     }
 
+    /**
+     * Records that [setlistId] was just played from, for the "last played" ordering.
+     *
+     * Called wherever a song is opened in the context of a setlist – its rows, resume,
+     * start from the beginning, and the drawer's running order.
+     */
+    fun markSetlistPlayed(setlistId: String?) {
+        val idx = setlists.indexOfFirst { it.id == setlistId }
+        if (idx != -1) {
+            setlists[idx] = setlists[idx].copy(lastPlayedAt = System.currentTimeMillis())
+            repository.saveSetlists(setlists)
+        }
+    }
+
+    // Resolved here rather than in the callback: stringResource needs a composable scope,
+    // and reading it this way keeps the suffix configuration-aware.
+    val copyTitleTemplate = stringResource(R.string.msg_setlist_copy_title)
+
+    /**
+     * Copies a programme for reuse – next year's Christmas service starts as last year's.
+     *
+     * The copy starts fresh: no resume position and never played, because the progress of
+     * the original says nothing about a run that has not happened yet.
+     */
+    fun duplicateSetlist(setlist: Setlist) {
+        setlists.add(
+            setlist.copy(
+                id = UUID.randomUUID().toString(),
+                title = copyTitleTemplate.format(setlist.title),
+                lastSongId = null,
+                lastPage = 0,
+                lastPlayedAt = 0L,
+            )
+        )
+        repository.saveSetlists(setlists)
+    }
+
+    /**
+     * Removes a setlist. The songs are untouched – they belong to the library.
+     *
+     * If the setlist or one of its songs is open further up the setlists stack, the stack
+     * is reset to the list: those screens would otherwise point at a programme that no
+     * longer exists.
+     */
+    fun deleteSetlist(setlist: Setlist) {
+        setlists.removeAll { it.id == setlist.id }
+        repository.saveSetlists(setlists)
+
+        val stack = navigationState.backStacks[AppRoute.Setlists]
+        val showsDeleted = stack?.any { route ->
+            ((route as? AppRoute.SetlistDetail)?.setlistId == setlist.id) ||
+                ((route as? AppRoute.SongDetail)?.setlistId == setlist.id)
+        } == true
+        if (showsDeleted) {
+            navigator.navigate(AppRoute.Setlists)
+        }
+    }
+
     // Shared by the list and the detail screen so a song always disappears from disk,
     // the library and every setlist in the same step.
     fun deleteSong(song: Song) {
@@ -509,11 +583,29 @@ fun MainApp() {
     }
 
     if (showCreateSetlistDialog) {
+        val editing = setlistToEdit
+        val closeSetlistDialog = {
+            showCreateSetlistDialog = false
+            setlistToEdit = null
+            newSetlistTitle = ""
+            newSetlistDate = ""
+            newSetlistNotes = ""
+        }
         AlertDialog(
-            onDismissRequest = { showCreateSetlistDialog = false },
+            onDismissRequest = closeSetlistDialog,
             modifier = Modifier.imePadding().padding(horizontal = 16.dp, vertical = 24.dp),
             properties = InputDialogProperties,
-            title = { Text(stringResource(R.string.dialog_new_setlist_title)) },
+            title = {
+                Text(
+                    stringResource(
+                        if (editing != null) {
+                            R.string.dialog_edit_setlist_title
+                        } else {
+                            R.string.dialog_new_setlist_title
+                        }
+                    )
+                )
+            },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     TextField(
@@ -540,27 +632,70 @@ fun MainApp() {
                 Button(
                     onClick = {
                         if (newSetlistTitle.isNotBlank()) {
-                            val newSetlist = Setlist(
-                                id = UUID.randomUUID().toString(),
-                                title = newSetlistTitle,
-                                date = newSetlistDate,
-                                songIds = emptyList(),
-                                notes = newSetlistNotes,
-                            )
-                            setlists.add(newSetlist)
-                            repository.saveSetlists(setlists)
-                            newSetlistTitle = ""
-                            newSetlistDate = ""
-                            newSetlistNotes = ""
-                            showCreateSetlistDialog = false
+                            if (editing != null) {
+                                val idx = setlists.indexOfFirst { it.id == editing.id }
+                                if (idx != -1) {
+                                    setlists[idx] = setlists[idx].copy(
+                                        title = newSetlistTitle,
+                                        date = newSetlistDate,
+                                        notes = newSetlistNotes,
+                                    )
+                                    repository.saveSetlists(setlists)
+                                }
+                            } else {
+                                val newSetlist = Setlist(
+                                    id = UUID.randomUUID().toString(),
+                                    title = newSetlistTitle,
+                                    date = newSetlistDate,
+                                    songIds = emptyList(),
+                                    notes = newSetlistNotes,
+                                )
+                                setlists.add(newSetlist)
+                                repository.saveSetlists(setlists)
+                            }
+                            closeSetlistDialog()
                         }
                     },
                 ) {
-                    Text(stringResource(R.string.action_create))
+                    Text(
+                        stringResource(
+                            if (editing != null) R.string.action_save else R.string.action_create
+                        )
+                    )
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateSetlistDialog = false }) {
+                TextButton(onClick = closeSetlistDialog) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    setlistToDelete?.let { setlist ->
+        // A dialog rather than snackbar-undo: a setlist carries a prepared order and a
+        // resume position, and losing that by a stray tap in a menu would be costly.
+        AlertDialog(
+            onDismissRequest = { setlistToDelete = null },
+            icon = { Icon(Icons.Default.DeleteOutline, contentDescription = null) },
+            title = { Text(stringResource(R.string.dialog_delete_setlist_title)) },
+            text = { Text(stringResource(R.string.msg_delete_setlist_confirm, setlist.title)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        setlistToDelete = null
+                        deleteSetlist(setlist)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ),
+                ) {
+                    Text(stringResource(R.string.action_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { setlistToDelete = null }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },
@@ -600,6 +735,7 @@ fun MainApp() {
                 onAddToSetlist = { showAddToSetlistDialog = it },
                 onEditSong = { songToEdit = it },
                 onDeleteSong = { songToDelete = it },
+                onMenuClick = openDrawer,
             )
         }
         entry<AppRoute.Setlists>(
@@ -613,8 +749,30 @@ fun MainApp() {
         ) {
             SetlistScreen(
                 setlists = setlists,
+                songs = songs,
                 onSetlistClick = { navigator.navigate(AppRoute.SetlistDetail(it.id)) },
-                onCreateSetlist = { showCreateSetlistDialog = true },
+                onCreateSetlist = {
+                    setlistToEdit = null
+                    showCreateSetlistDialog = true
+                },
+                onMenuClick = openDrawer,
+                onEditSetlist = { setlist ->
+                    // Prefill the shared dialog with the programme as it is now.
+                    setlistToEdit = setlist
+                    newSetlistTitle = setlist.title
+                    newSetlistDate = setlist.date
+                    newSetlistNotes = setlist.notes
+                    showCreateSetlistDialog = true
+                },
+                onDuplicateSetlist = { duplicateSetlist(it) },
+                onDeleteSetlist = { setlistToDelete = it },
+            )
+        }
+        entry<AppRoute.Settings> {
+            SettingsScreen(
+                settings = settings,
+                onSettingsChange = onSettingsChange,
+                onMenuClick = openDrawer,
             )
         }
         entry<AppRoute.SongDetail>(
@@ -622,13 +780,8 @@ fun MainApp() {
         ) { key: AppRoute.SongDetail ->
             val song = songs.find { it.id == key.songId }
             if (song != null) {
-                // Compact width means a single pane, so the detail view needs its own way
-                // back; from the medium breakpoint up, list and detail sit side by side.
-                val showBackButton = !currentWindowAdaptiveInfoV2().windowSizeClass
-                    .isWidthAtLeastBreakpoint(WIDTH_DP_MEDIUM_LOWER_BOUND)
-
                 // Ordered songs of the originating setlist, empty when opened from the
-                // song list. Drives both the jump strip and cross-song paging.
+                // song list. Drives both the drawer's running order and cross-song paging.
                 val contextSetlist = key.setlistId?.let { id -> setlists.find { it.id == id } }
                 val setlistSongs = remember(contextSetlist?.songIds, songs.toList()) {
                     contextSetlist?.songIds?.mapNotNull { id -> songs.find { it.id == id } }
@@ -637,7 +790,9 @@ fun MainApp() {
 
                 SongDetailScreen(
                     song = song,
-                    allSetlists = setlists,
+                    settings = settings,
+                    onMenuClick = openDrawer,
+                    showLyrics = lyricsSongId == song.id,
                     setlistSongs = setlistSongs,
                     onNavigateToSong = { target, openAtEnd ->
                         navigator.replace(
@@ -684,13 +839,6 @@ fun MainApp() {
                             }
                         }
                     },
-                    // On compact widths the strip cannot live in the rail, so the detail
-                    // screen shows its own horizontal version.
-                    showSetlistStrip = showBackButton,
-                    knownGenres = knownGenres,
-                    onBackClick = { navigator.goBack() },
-                    showBackButton = showBackButton,
-                    onPageTurn = { lastPageTurnTime = System.currentTimeMillis() },
                     onSongUpdated = { updatedSong ->
                         val idx = songs.indexOfFirst { it.id == updatedSong.id }
                         if (idx != -1) {
@@ -698,26 +846,17 @@ fun MainApp() {
                             repository.saveSongs(songs)
                         }
                     },
-                    onSongDeleted = { deletedSong ->
-                        // Leave the detail pane first – it would otherwise recompose
-                        // against a song that no longer exists.
-                        navigator.goBack()
-                        deleteSong(deletedSong)
-                    },
-                    onAddToSetlist = { showAddToSetlistDialog = it },
-                    onAttachFile = { target ->
-                        songToAttachFileTo = target
-                        attachFileLauncher.launch(documentMimeTypes)
-                    },
-                    onRemoveFile = { target ->
-                        val updatedSong = repository.detachFile(target)
-                        val idx = songs.indexOfFirst { it.id == updatedSong.id }
-                        if (idx != -1) {
-                            songs[idx] = updatedSong
-                            repository.saveSongs(songs)
-                        }
-                    },
                 )
+
+                // Keep the neighbours rendered ahead, so a page turn across the song
+                // boundary is instant. Used to sit in the rail, which no longer exists.
+                if (setlistSongs.size > 1) {
+                    val currentIndex = setlistSongs.indexOfFirst { it.id == song.id }
+                    if (currentIndex != -1) {
+                        setlistSongs.getOrNull(currentIndex + 1)?.let { PdfPreloader(it.fileUri) }
+                        setlistSongs.getOrNull(currentIndex - 1)?.let { PdfPreloader(it.fileUri) }
+                    }
+                }
             }
         }
         entry<AppRoute.SetlistDetail>(
@@ -725,13 +864,12 @@ fun MainApp() {
         ) { key: AppRoute.SetlistDetail ->
             val setlist = setlists.find { it.id == key.setlistId }
             if (setlist != null) {
-                val showBackButton = !currentWindowAdaptiveInfoV2().windowSizeClass
-                    .isWidthAtLeastBreakpoint(WIDTH_DP_MEDIUM_LOWER_BOUND)
                 SetlistDetailScreen(
                     setlist = setlist,
                     songs = songs,
                     onSongClick = {
                         markSongOpened(it.id)
+                        markSetlistPlayed(setlist.id)
                         // Pass the setlist along so paging can cross song boundaries.
                         // Tapping a specific song starts it from the top: the song was
                         // just announced, so its first page is what is wanted.
@@ -745,6 +883,7 @@ fun MainApp() {
                     },
                     onResume = { songId, page ->
                         markSongOpened(songId)
+                        markSetlistPlayed(setlist.id)
                         navigator.navigate(
                             AppRoute.SongDetail(
                                 songId = songId,
@@ -758,7 +897,11 @@ fun MainApp() {
                         // refers to this run rather than the abandoned one.
                         val idx = setlists.indexOfFirst { it.id == setlist.id }
                         if (idx != -1) {
-                            setlists[idx] = setlists[idx].copy(lastSongId = null, lastPage = 0)
+                            setlists[idx] = setlists[idx].copy(
+                                lastSongId = null,
+                                lastPage = 0,
+                                lastPlayedAt = System.currentTimeMillis(),
+                            )
                             repository.saveSetlists(setlists)
                         }
                         markSongOpened(firstSong.id)
@@ -771,7 +914,6 @@ fun MainApp() {
                         )
                     },
                     onBackClick = { navigator.goBack() },
-                    showBackButton = showBackButton,
                     onOrderChanged = { updatedSongIds ->
                         val idx = setlists.indexOfFirst { it.id == setlist.id }
                         if (idx != -1) {
@@ -792,96 +934,54 @@ fun MainApp() {
     }
 
     val currentRoute = navigationState.backStacks[navigationState.topLevelRoute]?.lastOrNull()
-    val railSongs = remember(currentRoute, songs.toList(), setlists.toList()) {
-        (currentRoute as? AppRoute.SongDetail)?.setlistId?.let { sid ->
+    val songRoute = currentRoute as? AppRoute.SongDetail
+    val currentSong = songRoute?.let { r -> songs.find { it.id == r.songId } }
+    val runningOrder = remember(songRoute?.setlistId, songs.toList(), setlists.toList()) {
+        songRoute?.setlistId?.let { sid ->
             setlists.find { it.id == sid }?.songIds?.mapNotNull { id -> songs.find { it.id == id } }
         } ?: emptyList()
     }
+    val closeDrawerThen: (() -> Unit) -> Unit = { action ->
+        drawerScope.launch { drawerState.close() }
+        action()
+    }
 
-    // Counts in the labels, so the size of the library is visible without opening it and
-    // an active filter is obvious from the mismatch with the list below.
-    val songsLabel = "Songs (${songs.size})"
-    val setlistsLabel = "Setlists (${setlists.size})"
-
-    val adaptiveInfo = currentWindowAdaptiveInfoV2()
-    val navigationSuiteType = NavigationSuiteScaffoldDefaults.navigationSuiteType(adaptiveInfo)
-
-    NavigationSuiteScaffoldLayout(
-        navigationSuite = {
-            NavigationSuite(
-                navigationSuiteType = navigationSuiteType
-            ) {
-                val isVertical = (navigationSuiteType == NavigationSuiteType.WideNavigationRailCollapsed) ||
-                                 (navigationSuiteType == NavigationSuiteType.WideNavigationRailExpanded) ||
-                                 (navigationSuiteType == NavigationSuiteType.NavigationRail)
-
-                if (isVertical) {
-                    Column(
-                        modifier = Modifier.fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        NavigationSuiteItem(
-                            selected = navigationState.topLevelRoute == AppRoute.Songs,
-                            onClick = { navigator.navigate(AppRoute.Songs) },
-                            icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
-                            label = { Text(songsLabel) },
-                            navigationSuiteType = navigationSuiteType
-                        )
-                        NavigationSuiteItem(
-                            selected = navigationState.topLevelRoute == AppRoute.Setlists,
-                            onClick = { navigator.navigate(AppRoute.Setlists) },
-                            icon = { Icon(Icons.Default.Menu, null) },
-                            label = { Text(setlistsLabel) },
-                            navigationSuiteType = navigationSuiteType
-                        )
-
-                        if (railSongs.size > 1) {
-                            Spacer(Modifier.weight(1f))
-                            val songRoute = currentRoute as AppRoute.SongDetail
-                            SetlistStrip(
-                                songs = railSongs,
-                                currentSongId = songRoute.songId,
-                                flashAlpha = flashAlpha.value,
-                                onSongClick = { target ->
-                                    markSongOpened(target.id)
-                                    navigator.replace(
-                                        AppRoute.SongDetail(
-                                            songId = target.id,
-                                            setlistId = songRoute.setlistId,
-                                            startPage = 0,
-                                        )
-                                    )
-                                },
-                                modifier = Modifier.padding(bottom = 16.dp)
-                            )
-
-                            // Preload neighbors for instant switching
-                            val currentIndex = railSongs.indexOfFirst { it.id == songRoute.songId }
-                            if (currentIndex != -1) {
-                                railSongs.getOrNull(currentIndex + 1)?.let { PdfPreloader(it.fileUri) }
-                                railSongs.getOrNull(currentIndex - 1)?.let { PdfPreloader(it.fileUri) }
-                            }
-                        }
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        // No edge swipe in the score view: it would fight with panning a zoomed page.
+        gesturesEnabled = drawerState.isOpen || (songRoute == null),
+        drawerContent = {
+            AppDrawerContent(
+                songCount = songs.size,
+                setlistCount = setlists.size,
+                selectedTopLevel = navigationState.topLevelRoute,
+                onNavigate = { route -> closeDrawerThen { navigator.navigate(route) } },
+                currentSong = currentSong,
+                showingLyrics = (currentSong != null) && (lyricsSongId == currentSong.id),
+                onEditSong = { closeDrawerThen { songToEdit = currentSong } },
+                onAddToSetlist = { closeDrawerThen { showAddToSetlistDialog = currentSong } },
+                onToggleLyrics = {
+                    closeDrawerThen {
+                        lyricsSongId = if (lyricsSongId == currentSong?.id) null else currentSong?.id
                     }
-                } else {
-                    NavigationSuiteItem(
-                        selected = navigationState.topLevelRoute == AppRoute.Songs,
-                        onClick = { navigator.navigate(AppRoute.Songs) },
-                        icon = { Icon(Icons.AutoMirrored.Filled.List, null) },
-                        label = { Text(stringResource(R.string.nav_songs)) },
-                        navigationSuiteType = navigationSuiteType
-                    )
-                    NavigationSuiteItem(
-                        selected = navigationState.topLevelRoute == AppRoute.Setlists,
-                        onClick = { navigator.navigate(AppRoute.Setlists) },
-                        icon = { Icon(Icons.Default.Menu, null) },
-                        label = { Text(stringResource(R.string.nav_setlists)) },
-                        navigationSuiteType = navigationSuiteType
-                    )
-                }
-            }
+                },
+                onDeleteSong = { closeDrawerThen { songToDelete = currentSong } },
+                runningOrder = runningOrder,
+                onSongClick = { target ->
+                    closeDrawerThen {
+                        markSongOpened(target.id)
+                        markSetlistPlayed(songRoute?.setlistId)
+                        navigator.replace(
+                            AppRoute.SongDetail(
+                                songId = target.id,
+                                setlistId = songRoute?.setlistId,
+                                startPage = 0,
+                            )
+                        )
+                    }
+                },
+            )
         },
-        layoutType = navigationSuiteType
     ) {
         NavDisplay(
             entries = navigationState.toEntries(entryProvider),

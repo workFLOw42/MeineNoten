@@ -1,6 +1,7 @@
 package de.workflow42.meinenoten.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,23 +9,30 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -36,22 +44,147 @@ import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.ui.components.DateField
+import de.workflow42.meinenoten.ui.components.AlphabetIndex
 import de.workflow42.meinenoten.ui.components.InputDialogProperties
+import de.workflow42.meinenoten.ui.components.SetlistFilterBar
+import de.workflow42.meinenoten.ui.components.SongSectionHeader
+import de.workflow42.meinenoten.ui.util.SetlistPeriod
+import de.workflow42.meinenoten.ui.util.SetlistSortMode
+import de.workflow42.meinenoten.ui.util.SongHeading
+import de.workflow42.meinenoten.ui.util.SongSortMode
 import de.workflow42.meinenoten.ui.util.formatSetlistDate
+import de.workflow42.meinenoten.ui.util.groupHeading
+import de.workflow42.meinenoten.ui.util.isIn
+import de.workflow42.meinenoten.ui.util.matches
+import de.workflow42.meinenoten.ui.util.nextUpcoming
+import de.workflow42.meinenoten.ui.util.parseSetlistDate
+import de.workflow42.meinenoten.ui.util.progressPosition
 import de.workflow42.meinenoten.ui.util.sortedForDisplay
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
+/**
+ * A run of setlists under one heading, or a single unheaded run ([label] null).
+ *
+ * Built once and used both for rendering and for the jump index, like the song list's
+ * sections, so the index cannot disagree with the headings about where a group begins.
+ */
+private data class SetlistSection(val label: String?, val setlists: List<Setlist>)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SetlistScreen(
     setlists: List<Setlist>,
+    /** Used for searching by song, the "contains song" and genre filters. */
+    songs: List<Song>,
     onSetlistClick: (Setlist) -> Unit,
     onCreateSetlist: () -> Unit,
+    /** Opens the app's navigation drawer, which replaced the navigation rail. */
+    onMenuClick: () -> Unit,
+    onEditSetlist: (Setlist) -> Unit,
+    onDuplicateSetlist: (Setlist) -> Unit,
+    /** Asks for confirmation before deleting; the caller owns the actual removal. */
+    onDeleteSetlist: (Setlist) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Newest concert first – that is nearly always the one being looked for.
-    val sortedSetlists = remember(setlists.toList()) { setlists.sortedForDisplay() }
+    // View state, not data: survives rotation, deliberately not persisted.
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var sortMode by rememberSaveable { mutableStateOf(SetlistSortMode.DATE) }
+    var period by rememberSaveable { mutableStateOf(SetlistPeriod.ALL) }
+    var selectedSongId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedGenre by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val listState = rememberLazyListState()
+
+    // Snapshots of the contents: the caller passes SnapshotStateLists whose identity never
+    // changes, so keying on the instances would never recompute.
+    val setlistList = setlists.toList()
+    val songList = songs.toList()
+
+    val songsById = remember(songList) { songList.associateBy { it.id } }
+    val songsForMenu = remember(songList) { songList.sortedForDisplay(SongSortMode.TITLE) }
+    val genres = remember(songList) {
+        songList.asSequence().map { it.genre }.filter { it.isNotBlank() }.distinct().sorted()
+            .toList()
+    }
+
+    // A filter can outlive what it points at – a deleted song or a genre renamed on its
+    // last song would otherwise leave an empty list with no visible way back.
+    val activeSongId = selectedSongId?.takeIf { songsById.containsKey(it) }
+    val activeGenre = selectedGenre?.takeIf { genres.contains(it) }
+
+    val visibleSetlists = remember(
+        setlistList, songsById, searchQuery, period, activeSongId, activeGenre, sortMode,
+    ) {
+        setlistList
+            .filter { it.isIn(period) }
+            .filter { (activeSongId == null) || it.songIds.contains(activeSongId) }
+            .filter { setlist ->
+                activeGenre == null || setlist.songIds.any { id ->
+                    songsById[id]?.genre.equals(activeGenre, ignoreCase = true)
+                }
+            }
+            .filter { it.matches(searchQuery, songsById) }
+            .sortedForDisplay(sortMode)
+    }
+
+    // Judged over all setlists, not the filtered ones: "next" is a fact about the
+    // calendar, and it must not move just because a filter hides the real next one.
+    val nextSetlistId = remember(setlistList) { setlistList.nextUpcoming()?.id }
+
+    // The "no date" heading is resolved here: stringResource needs a composable scope, and
+    // SetlistUtils holds no display text.
+    val noDateHeading = stringResource(R.string.empty_no_date)
+    val sections = remember(visibleSetlists, sortMode, noDateHeading) {
+        visibleSetlists
+            .groupBy { it.groupHeading(sortMode) }
+            .map { (heading, entries) ->
+                val label = when (heading) {
+                    is SongHeading.Text -> heading.value
+                    SongHeading.Untitled -> noDateHeading
+                    SongHeading.None -> null
+                }
+                SetlistSection(label, entries)
+            }
+    }
+
+    // Same walk as the song list: one item per header plus one per row, so each label maps
+    // to the list index of its own header.
+    val indexSections = remember(sections) {
+        var itemIndex = 0
+        sections.mapNotNull { section ->
+            val label = section.label
+            val headerIndex = itemIndex
+            if (label != null) itemIndex++
+            itemIndex += section.setlists.size
+            label?.let { it to headerIndex }
+        }
+    }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        stringResource(
+                            R.string.msg_nav_with_count,
+                            stringResource(R.string.nav_setlists),
+                            setlists.size,
+                        )
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onMenuClick) {
+                        Icon(
+                            Icons.Default.Menu,
+                            contentDescription = stringResource(R.string.cd_open_menu),
+                        )
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = onCreateSetlist) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_create_setlist))
@@ -59,52 +192,252 @@ fun SetlistScreen(
         },
         modifier = modifier,
     ) { innerPadding ->
-        if (sortedSetlists.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.empty_no_setlists),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.outline
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            // Hidden while there is nothing at all: filtering an empty list is pointless,
+            // and the empty state should be the only thing on screen.
+            if (setlistList.isNotEmpty()) {
+                SetlistFilterBar(
+                    songs = songsForMenu,
+                    genres = genres,
+                    searchQuery = searchQuery,
+                    sortMode = sortMode,
+                    period = period,
+                    selectedSongId = activeSongId,
+                    selectedGenre = activeGenre,
+                    onSearchQueryChange = { searchQuery = it },
+                    onSortModeSelected = { sortMode = it },
+                    onPeriodSelected = { period = it },
+                    onSongSelected = { selectedSongId = it },
+                    onGenreSelected = { selectedGenre = it },
                 )
             }
-            return@Scaffold
-        }
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            items(sortedSetlists, key = { it.id }) { setlist ->
-                val songCount = setlist.songIds.size
-                val dateLabel = formatSetlistDate(setlist.date)
-                ListItem(
-                    headlineContent = { Text(text = setlist.title) },
-                    supportingContent = {
-                        val songLabel = pluralStringResource(
-                            R.plurals.song_count,
-                            songCount,
-                            songCount,
-                        )
-                        Text(
-                            if (dateLabel.isNotBlank()) {
-                                stringResource(R.string.msg_setlist_summary, dateLabel, songLabel)
-                            } else {
-                                songLabel
-                            }
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSetlistClick(setlist) }
-                )
-                HorizontalDivider()
+            if (visibleSetlists.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        // Three dead ends, three remedies: create one, clear the search,
+                        // or clear the filter.
+                        text = when {
+                            setlistList.isEmpty() -> stringResource(R.string.empty_no_setlists)
+                            searchQuery.isNotBlank() ->
+                                stringResource(R.string.empty_no_search_results, searchQuery)
+
+                            else -> stringResource(R.string.empty_no_setlist_filter_results)
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+                return@Column
             }
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    sections.forEach { section ->
+                        if (section.label != null) {
+                            stickyHeader(key = "header-${sortMode.name}-${section.label}") {
+                                SongSectionHeader(label = section.label)
+                            }
+                        }
+                        items(items = section.setlists, key = { it.id }) { setlist ->
+                            SetlistRow(
+                                setlist = setlist,
+                                isNext = setlist.id == nextSetlistId,
+                                onClick = { onSetlistClick(setlist) },
+                                onEdit = { onEditSetlist(setlist) },
+                                onDuplicate = { onDuplicateSetlist(setlist) },
+                                onDelete = { onDeleteSetlist(setlist) },
+                            )
+                        }
+                    }
+                }
+
+                AlphabetIndex(
+                    sections = indexSections,
+                    listState = listState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One setlist in the list.
+ *
+ * The date sits in a small calendar leaf at the start rather than in the text: when
+ * looking for a programme, the date is what the eye scans for, and a fixed-width block
+ * lines the days up down the list.
+ *
+ * The next upcoming programme is tinted and labelled, because "what are we playing on
+ * Sunday" is the most common reason to open this list.
+ */
+@Composable
+private fun SetlistRow(
+    setlist: Setlist,
+    isNext: Boolean,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val parsedDate = remember(setlist.date) { parseSetlistDate(setlist.date) }
+    val songCount = setlist.songIds.size
+    val progress = setlist.progressPosition
+
+    Column {
+        ListItem(
+            leadingContent = { CalendarLeaf(date = parsedDate) },
+            headlineContent = { Text(text = setlist.title) },
+            supportingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isNext) {
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(end = 6.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.label_next_setlist),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                    Text(
+                        text = pluralStringResource(R.plurals.song_count, songCount, songCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    if (progress != null) {
+                        // Coloured, so a half-played service stands out from the rest.
+                        Text(
+                            text = " · ▶ " +
+                                stringResource(R.string.msg_setlist_in_progress, progress),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            },
+            trailingContent = {
+                SetlistOverflowMenu(
+                    onEdit = onEdit,
+                    onDuplicate = onDuplicate,
+                    onDelete = onDelete,
+                )
+            },
+            colors = if (isNext) {
+                ListItemDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                )
+            } else {
+                ListItemDefaults.colors()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+        )
+        HorizontalDivider()
+    }
+}
+
+/**
+ * Day over short month, like a tear-off calendar. Month names come from the device
+ * locale, so the leaf reads "DEZ" or "DEC" to match the rest of the UI.
+ *
+ * Without a usable date an icon stands in, keeping the titles aligned.
+ */
+@Composable
+private fun CalendarLeaf(date: LocalDate?) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier.size(48.dp),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            if (date != null) {
+                val month = remember(date) {
+                    date.format(DateTimeFormatter.ofPattern("MMM", Locale.getDefault()))
+                        .trimEnd('.')
+                        .uppercase(Locale.getDefault())
+                }
+                Text(
+                    text = date.dayOfMonth.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(text = month, style = MaterialTheme.typography.labelSmall)
+            } else {
+                Icon(Icons.AutoMirrored.Filled.EventNote, contentDescription = null)
+            }
+        }
+    }
+}
+
+/**
+ * Edit, duplicate, delete – the same visual pattern as the song overflow menu, with the
+ * destructive entry last, separated and in the error colour.
+ */
+@Composable
+private fun SetlistOverflowMenu(
+    onEdit: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(value = false) }
+
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                Icons.Default.MoreVert,
+                contentDescription = stringResource(R.string.cd_more_actions),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_edit)) },
+                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onEdit()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_duplicate)) },
+                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onDuplicate()
+                },
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.DeleteOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onDelete()
+                },
+            )
         }
     }
 }
@@ -119,7 +452,6 @@ fun SetlistDetailScreen(
     onOrderChanged: (List<String>) -> Unit,
     onSetlistUpdated: (Setlist) -> Unit,
     modifier: Modifier = Modifier,
-    showBackButton: Boolean = true,
     /** Opens the stored position: song id and zero-based page. */
     onResume: (String, Int) -> Unit = { _, _ -> },
     /** Opens the first song of the programme and clears the stored position. */
@@ -263,13 +595,13 @@ fun SetlistDetailScreen(
                     }
                 },
                 navigationIcon = {
-                    if (showBackButton) {
-                        IconButton(onClick = onBackClick) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.cd_back)
-                            )
-                        }
+                    // Always shown: without the split view there is no list pane beside
+                    // this screen to go back to.
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back)
+                        )
                     }
                 },
                 actions = {

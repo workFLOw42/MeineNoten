@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,6 +53,7 @@ private data class SongEntry(val song: Song, val position: Int)
  */
 private data class SongSection(val label: String?, val entries: List<SongEntry>)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SongListScreen(
     songs: List<Song>,
@@ -64,6 +66,8 @@ fun SongListScreen(
     onEditSong: (Song) -> Unit,
     /** Asks for confirmation before deleting; the caller owns the actual removal. */
     onDeleteSong: (Song) -> Unit,
+    /** Opens the app's navigation drawer, which replaced the navigation rail. */
+    onMenuClick: () -> Unit,
     modifier: Modifier = Modifier,
     /** Offered as a filter, so a service can be prepared without leaving this screen. */
     setlists: List<Setlist> = emptyList(),
@@ -151,6 +155,29 @@ fun SongListScreen(
 
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                // The total, not the filtered count: a mismatch with the rows below makes
+                // an active filter obvious at a glance.
+                title = {
+                    Text(
+                        stringResource(
+                            R.string.msg_nav_with_count,
+                            stringResource(R.string.nav_songs),
+                            songList.size,
+                        )
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onMenuClick) {
+                        Icon(
+                            Icons.Default.Menu,
+                            contentDescription = stringResource(R.string.cd_open_menu),
+                        )
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End) {
                 SmallFloatingActionButton(

@@ -14,9 +14,12 @@ einzigen, blind ausführbaren Berührung.
 * **PDF und MusicXML** – Scans seitengetreu, digitale Noten als scharfe Vektoren
   (`.xml`, `.musicxml`, `.mxl`)
 * **Textnotizen** – Liedtexte oder Akkorde ganz ohne Datei
-* **Freihändiges Blättern** – Bluetooth-Pedal, Wischen, Tipp-Zonen oder Leiste unten
-* **Setlists** – Reihenfolge vorbereiten, am Liedende direkt ins nächste Stück
-* **Bühnentauglich** – Display bleibt an, letzte Seite wird pro Lied gemerkt
+* **Freihändiges Blättern** – Bluetooth-Pedal, Tippzonen oder Knöpfe ◀ ▶ in der Statusleiste
+* **Zoom pro Seite** – Zwei-Finger-Zoom, wird pro Notenseite gemerkt
+* **Setlists** – Reihenfolge vorbereiten, am Liedende direkt ins nächste Stück, dort
+  weitermachen, wo man aufgehört hat
+* **Suchen, Filtern, Sortieren** – in Songliste und Setlists, mit Buchstabenleiste
+* **Einstellbar** – Statusleiste, Tippzonen, Pedalrichtung, Design (System/Hell/Dunkel)
 * **Offline** – keine Internetverbindung, keine Android-Berechtigung, kein Konto
 
 ## Anleitung
@@ -35,19 +38,31 @@ danach verschoben oder gelöscht werden, ohne dass die App den Zugriff verliert.
 
 ### Umblättern
 
-Während der Anzeige stehen vier Wege parallel zur Verfügung – alle gleichzeitig aktiv,
-nichts muss eingestellt werden:
+Während der Anzeige stehen drei Wege parallel zur Verfügung. Ab Werk sind alle aktiv,
+in den *Einstellungen* lassen sie sich anpassen:
 
 | Eingabe | Vorwärts | Rückwärts |
 |---|---|---|
-| Pedal / Tastatur | `Bild ab`, `→`, `↓`, `Leertaste`, `Enter`, `Lauter`-/`Leiser`-Taste, Medientasten | `Bild auf`, `←`, `↑`, Medientaste zurück |
-| Wischen | nach links | nach rechts |
-| Tippen | rechtes Bildschirmdrittel | linkes Bildschirmdrittel |
-| Leiste unten | Pfeil rechts | Pfeil links |
+| Pedal / Tastatur | `Bild ab`, `→`, `↓`, `Leertaste`, `Enter`, `Leiser`-Taste, Medientaste vor | `Bild auf`, `←`, `↑`, `Lauter`-Taste, Medientaste zurück |
+| Tippzonen | rechte Hälfte des unteren Drittels | linke Hälfte des unteren Drittels |
+| Statusleiste oben | ▶ | ◀ |
 
-Ein **Tipp in die Bildmitte** blendet die Bedienleisten ein und aus. Jeder Seitenwechsel
-wird mit einem kurzen grünen Aufblitzen bestätigt – so erkennt man den Pedaltritt auch
-bei zwei ähnlich aussehenden Seiten, ohne den Blick von den Noten zu nehmen.
+Die oberen zwei Drittel bleiben frei zum Zoomen und Verschieben. Wischen blättert bewusst
+nicht um, weil es sich mit dem Verschieben einer gezoomten Seite ins Gehege käme.
+
+Die **Statusleiste** bleibt immer sichtbar und zeigt Lied, Position in der Setlist und
+Seite. Auf der letzten Seite wird aus ▶ ein ⏭ – der nächste Tipp wechselt das Lied.
+
+Jeder Seitenwechsel wird mit einem kurzen grünen Rand bestätigt. So erkennt man den
+Pedaltritt auch bei zwei ähnlich aussehenden Seiten, ohne den Blick von den Noten zu
+nehmen.
+
+### Menü
+
+Alles Weitere liegt im **Menü oben links**: Songliste, Setlists, Einstellungen und – bei
+geöffnetem Lied – *Bearbeiten*, *Zur Setlist hinzufügen*, *Liedtext anzeigen* und
+*Löschen*. Wurde das Lied aus einer Setlist geöffnet, steht darunter die ganze
+Reihenfolge zum direkten Springen.
 
 ### Bluetooth-Pedal einrichten
 
@@ -66,12 +81,28 @@ erweitern.
 ### Setlists
 
 Unter *Setlists* eine neue Liste anlegen, mit Konzertdatum versehen und Lieder über das
-Symbol rechts in der Songliste hinzufügen. Listen erscheinen nach Datum sortiert, das
-nächste Ereignis oben.
+Menü an jedem Lied hinzufügen. Listen erscheinen nach Datum sortiert und nach Jahr
+gruppiert, das nächste anstehende Programm ist hervorgehoben. Alternativ lässt sich nach
+Titel oder *Zuletzt gespielt* sortieren und nach kommenden oder vergangenen Terminen
+filtern. Die Suche findet auch Lieder innerhalb der Setlists.
+
+Eine Setlist merkt sich, bei welchem Lied und welcher Seite sie verlassen wurde, und
+bietet *Fortsetzen* an. Nach dem letzten Lied beginnt sie wieder von vorn.
 
 Wird ein Lied **aus einer Setlist heraus** geöffnet, blättert man am Ende der letzten
 Seite direkt in das nächste Stück – das Pedal funktioniert also über die gesamte Setlist
 hinweg. Aus der Songliste geöffnet bleibt die Anzeige an den Liedgrenzen stehen.
+
+### Einstellungen
+
+| Bereich | Einstellbar |
+|---|---|
+| Statusleiste | Liedtitel, Position „Lied x/n“, Seitenzahl, Knöpfe ◀ ▶, Ankündigung ⏭ |
+| Umblättern | Tippzonen an/aus, Größe (unteres Drittel, untere Hälfte, ganze Höhe), Seiten tauschen, grüner Rand, Titel beim Liedwechsel |
+| Pedal & Tasten | Lautstärketasten blättern, Richtung umkehren |
+| Anzeige | Bildschirm bleibt an, Zoom pro Seite merken, Design |
+
+Die Standardwerte entsprechen dem Verhalten vor Einführung der Einstellungen.
 
 ## Technik
 
@@ -79,16 +110,16 @@ hinweg. Aus der Songliste geöffnet bleibt die Anzeige an den Liedgrenzen stehen
 |---|---|
 | Sprache | Kotlin |
 | Oberfläche | Jetpack Compose, Material 3 |
-| Navigation | Navigation 3, adaptives Layout |
+| Navigation | Navigation 3, Navigationsmenü (Drawer) |
 | PDF | `PdfRenderer` (Framework, keine externe Bibliothek) |
 | MusicXML | OpenSheetMusicDisplay im WebView, offline als Asset |
-| Speicherung | JSON über kotlinx.serialization |
+| Speicherung | JSON über kotlinx.serialization, Einstellungen per DataStore |
+| Start | SplashScreen-API mit nahtlosem Compose-Startbildschirm |
 | `minSdk` | 26 (Android 8.0) |
 | `targetSdk` | 36 |
 
 Entwickelt und geprüft für ein 8-Zoll-Tablet (Samsung Galaxy Tab S6 Lite), läuft aber
-auf Telefonen und größeren Tablets ebenso – das Layout wechselt je nach Fenstergröße
-zwischen Navigationsleiste und Navigationsschiene.
+auf Telefonen und größeren Tablets ebenso. Oberfläche auf Deutsch und Englisch.
 
 ## Selbst bauen
 
@@ -111,6 +142,10 @@ signing.keyPassword=...
 ```bash
 ./gradlew :app:bundleRelease
 ```
+
+Die Versionsnummer steht in [version.properties](app/version.properties) und wird nach
+jedem erfolgreichen `bundleRelease` automatisch hochgezählt – die Datei gehört deshalb
+mit ins Repository.
 
 Release-Builds werden mit R8 verkleinert. Die zugehörigen Keep-Rules stehen in
 [rules.keep](app/src/main/keepRules/rules.keep) und sind notwendig – ohne sie würden die

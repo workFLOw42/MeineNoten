@@ -3,4 +3,19 @@
     <style name="Theme.MeineNoten" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your theme here. -->
     </style>
+
+    <!--
+        Shown by the system from the first frame until the settings are loaded.
+
+        The system splash only allows a flat background, no gradient. So it shows white with
+        the note on the blue icon circle, and the Compose launch screen starts from exactly
+        that picture and lets the blue flow out towards the edges. Neutral white also avoids
+        guessing light or dark before the user's choice is known.
+    -->
+    <style name="Theme.MeineNoten.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/white</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.MeineNoten</item>
+    </style>
 </resources>

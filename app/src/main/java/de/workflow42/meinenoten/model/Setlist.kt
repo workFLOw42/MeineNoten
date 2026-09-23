@@ -20,6 +20,14 @@ data class Setlist(
     val lastSongId: String? = null,
     /** Page within [lastSongId]. Meaningless while that is null. */
     val lastPage: Int = 0,
+    /**
+     * When a song was last opened from this setlist, as epoch millis; 0 means never.
+     *
+     * Drives the "last played" ordering of the setlist list. Kept separate from [date]:
+     * the concert date is when a programme is *meant* to be played, this is when it
+     * actually was – rehearsals included. The default keeps older files readable.
+     */
+    val lastPlayedAt: Long = 0L,
 ) {
     /** True once there is a position worth offering to resume from. */
     val hasProgress: Boolean

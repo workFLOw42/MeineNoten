@@ -71,6 +71,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // Lets the settings screen show BuildConfig.VERSION_NAME / VERSION_CODE.
+        buildConfig = true
     }
 }
 
@@ -147,6 +149,8 @@ dependencies {
     implementation(libs.androidx.adaptive.navigation3)
     implementation(libs.androidx.adaptive.layout)
     implementation(libs.androidx.material3.adaptive.navigation.suite)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.core.splashscreen)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

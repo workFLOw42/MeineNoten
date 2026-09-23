@@ -8,28 +8,25 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.automirrored.filled.Subject
+import androidx.compose.material.icons.automirrored.filled.StickyNote2
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,18 +45,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.workflow42.meinenoten.R
-import de.workflow42.meinenoten.model.Setlist
+import de.workflow42.meinenoten.data.AppSettings
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
 import de.workflow42.meinenoten.ui.components.MusicXmlView
 import de.workflow42.meinenoten.ui.components.PdfView
-import de.workflow42.meinenoten.ui.components.SetlistStripHorizontal
-import de.workflow42.meinenoten.ui.components.DeleteSongDialog
-import de.workflow42.meinenoten.ui.components.EditSongDialog
-import de.workflow42.meinenoten.ui.components.SongOverflowMenu
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -78,23 +70,18 @@ private val FlashBorderWidth = 6.dp
 @Composable
 fun SongDetailScreen(
     song: Song,
-    allSetlists: List<Setlist>,
-    onBackClick: () -> Unit,
+    /** Status bar, tap zones, keys and display behaviour, all user-adjustable. */
+    settings: AppSettings,
+    /** Opens the navigation drawer, which now holds the song actions as well. */
+    onMenuClick: () -> Unit,
     onSongUpdated: (Song) -> Unit,
-    onSongDeleted: (Song) -> Unit,
-    /** Opens the "add to setlist" picker, which is owned by the host. */
-    onAddToSetlist: (Song) -> Unit,
-    /** Opens the file picker to attach or replace this song's score. */
-    onAttachFile: (Song) -> Unit,
-    /** Drops the score file, leaving a text-only song. */
-    onRemoveFile: (Song) -> Unit,
     modifier: Modifier = Modifier,
-    showBackButton: Boolean = true,
     /**
-     * Genres already in use, offered as chips in the edit dialog so the same category
-     * is not re-typed with a different spelling.
+     * Whether the typed lyrics are shown instead of the score. Hoisted because the
+     * toggle lives in the navigation drawer, outside this screen. Ignored for songs
+     * without a file, which can only show their text.
      */
-    knownGenres: List<String> = emptyList(),
+    showLyrics: Boolean = false,
     /** Ordered songs of the setlist this song was opened from; empty otherwise. */
     setlistSongs: List<Song> = emptyList(),
     /** Opens another song. The flag requests its last page instead of its first. */
@@ -113,18 +100,9 @@ fun SongDetailScreen(
      * be cleared and the programme starts from the top next time.
      */
     onFinished: () -> Unit = {},
-    /**
-     * True on compact widths, where the navigation rail (and with it the vertical
-     * [SetlistStripHorizontal] counterpart) is not shown. The screen then hosts its own
-     * position indicator so the running order stays visible on a phone.
-     */
-    showSetlistStrip: Boolean = false,
-    /** Called when a page turn occurs (for UI cues). */
-    onPageTurn: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
     // Start where the caller asked: a page carried over from a setlist's saved
     // position, or 0 when the song was opened from the library. -1 means "resolve to
     // the last page once the page count is known".
@@ -132,31 +110,35 @@ fun SongDetailScreen(
         mutableIntStateOf(if (openAtEnd) -1 else startPage)
     }
     var pageCount by remember(song.id) { mutableIntStateOf(0) }
-    var isUiVisible by remember { mutableStateOf(value = true) }
     val focusRequester = remember { FocusRequester() }
+    var notesExpanded by remember(song.id) { mutableStateOf(value = false) }
 
     val flashAlpha = remember { Animatable(0f) }
 
     val triggerFlash: suspend () -> Unit = {
-        onPageTurn()
-        // Fast attack, slightly longer decay to cover the PDF rendering time
-        flashAlpha.animateTo(0.2f, animationSpec = tween(50))
-        flashAlpha.animateTo(0f, animationSpec = tween(500))
+        if (settings.pageTurnFlash) {
+            // Fast attack, slightly longer decay to cover the PDF rendering time
+            flashAlpha.animateTo(0.2f, animationSpec = tween(50))
+            flashAlpha.animateTo(0f, animationSpec = tween(500))
+        }
     }
 
     val isPagedDocument = song.sourceType == SongSource.PDF
 
-    // A song can hold a score *and* its typed text. The text view is the only option
-    // when there is no file, and an opt-in toggle once one has been attached.
-    var showLyrics by remember(song.id) { mutableStateOf(!song.hasFile) }
+    // With "remember zoom" off, stored zoom levels are neither applied nor written:
+    // the view still zooms, but only for as long as the song stays open.
+    var localPageViews by remember(song.id, song.pageViews, settings.rememberZoom) {
+        mutableStateOf(if (settings.rememberZoom) song.pageViews else emptyMap())
+    }
 
-    var localPageViews by remember(song.id, song.pageViews) { mutableStateOf(song.pageViews) }
-
-    LaunchedEffect(localPageViews) {
+    LaunchedEffect(localPageViews, settings.rememberZoom) {
+        if (!settings.rememberZoom) return@LaunchedEffect
         if (localPageViews == song.pageViews) return@LaunchedEffect
         delay(300)
         onSongUpdated(song.copy(pageViews = localPageViews))
     }
+    // A song can hold a score *and* its typed text. The text view is the only option
+    // when there is no file, and an opt-in toggle once one has been attached.
     val lyricsVisible = showLyrics || !song.hasFile
 
     // Position within the setlist, or -1 when opened from the song list.
@@ -225,7 +207,7 @@ fun SongDetailScreen(
             scope.launch { triggerFlash() }
         } else if (nextSong != null) {
             // Past the last page: continue with the next song of the setlist.
-            songChangeLabel = nextSong.displayTitle
+            if (settings.songChangeBanner) songChangeLabel = nextSong.displayTitle
             onNavigateToSong(nextSong, false)
         }
     }
@@ -238,198 +220,165 @@ fun SongDetailScreen(
             scope.launch { triggerFlash() }
         } else if (previousSong != null) {
             // Before the first page: land on the last page of the previous song.
-            songChangeLabel = previousSong.displayTitle
+            if (settings.songChangeBanner) songChangeLabel = previousSong.displayTitle
             onNavigateToSong(previousSong, true)
         }
     }
     
-    var showEditDialog by remember { mutableStateOf(value = false) }
-    var showDeleteConfirm by remember { mutableStateOf(value = false) }
+    // What the status bar buttons do next. Computed once so the icon, the enabled state
+    // and the actual action cannot disagree about whether a song change is coming.
+    val resolvedPage = currentPage.coerceAtLeast(0)
+    val hasNextPage = isPagedDocument && (resolvedPage < pageCount - 1)
+    val hasPreviousPage = isPagedDocument && (resolvedPage > 0)
+    val canGoNext = hasNextPage || (nextSong != null)
+    val canGoPrevious = hasPreviousPage || (previousSong != null)
+    // ⏭ / ⏮ instead of the plain arrow warns that the next tap leaves this song. Only
+    // once the page count is known, so a PDF still loading does not flash the wrong icon.
+    val pagesKnown = !isPagedDocument || (pageCount > 0)
+    val nextIsSongChange = settings.announceSongChange && pagesKnown &&
+        !hasNextPage && (nextSong != null)
+    val previousIsSongChange = settings.announceSongChange && pagesKnown &&
+        !hasPreviousPage && (previousSong != null)
 
-    val songSetlists = remember(song.id, allSetlists.toList()) {
-        allSetlists.filter { it.songIds.contains(song.id) }
-    }
-
-    // Display Always On logic
-    DisposableEffect(Unit) {
+    // Keyed on the setting so switching it in the drawer's settings screen and coming
+    // back takes effect without reopening the song.
+    DisposableEffect(settings.keepScreenOn) {
         val window = (context as? Activity)?.window
-        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (settings.keepScreenOn) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         focusRequester.requestFocus()
-        
+
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
-    if (showDeleteConfirm) {
-        DeleteSongDialog(
-            song = song,
-            affectedSetlists = songSetlists,
-            onConfirm = {
-                showDeleteConfirm = false
-                showEditDialog = false
-                onSongDeleted(song)
-            },
-            onDismiss = { showDeleteConfirm = false },
-        )
-    }
-
-    if (showEditDialog) {
-        EditSongDialog(
-            song = song,
-            songSetlists = songSetlists,
-            knownGenres = knownGenres,
-            onSave = { updatedSong ->
-                onSongUpdated(updatedSong)
-                showEditDialog = false
-            },
-            onDismiss = { showEditDialog = false },
-            // The dialog stays open across the picker round trip, so the result is
-            // visible right where it was requested.
-            onAttachFile = { onAttachFile(song) },
-            onRemoveFile = { onRemoveFile(song) },
-        )
-    }
-
     Scaffold(
         topBar = {
-            AnimatedVisibility(
-                visible = isUiVisible,
-                enter = slideInVertically(initialOffsetY = { -it }),
-                exit = slideOutVertically(targetOffsetY = { -it })
-            ) {
-                TopAppBar(
-                    title = {
-                        // Prefixing the running-order position keeps "which song am I in"
-                        // answerable even where the setlist strip has no room.
-                        Text(
-                            text = if (setlistIndex >= 0 && setlistSongs.size > 1) {
-                                stringResource(
-                                    R.string.msg_song_of_total,
-                                    setlistIndex + 1,
-                                    setlistSongs.size,
-                                    song.displayTitle,
-                                )
-                            } else {
-                                song.displayTitle
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    navigationIcon = {
-                        if (showBackButton) {
-                            IconButton(onClick = onBackClick) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = stringResource(R.string.cd_back)
-                                )
-                            }
+            // Always visible: it is the status bar of the performance (where am I, what
+            // comes next), so hiding it on a tap would hide exactly what is needed.
+            CenterAlignedTopAppBar(
+                title = {
+                    SongStatusTitle(
+                        song = song,
+                        settings = settings,
+                        setlistPosition = setlistIndex.takeIf { it >= 0 && setlistSongs.size > 1 }
+                            ?.let { it + 1 to setlistSongs.size },
+                        pagePosition = if (isPagedDocument && pageCount > 0) {
+                            resolvedPage + 1 to pageCount
+                        } else {
+                            null
+                        },
+                    )
+                },
+                navigationIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // No back arrow: system back still works, and the menu is the one
+                        // way into everything else, wherever the song was opened from.
+                        IconButton(onClick = onMenuClick) {
+                            Icon(
+                                Icons.Default.Menu,
+                                contentDescription = stringResource(R.string.cd_open_menu),
+                            )
                         }
-                    },
-                    actions = {
-                        // Only meaningful when both representations exist.
-                        if (song.hasFile && song.lyrics.isNotBlank()) {
-                            IconButton(onClick = { showLyrics = !showLyrics }) {
-                                Icon(
-                                    imageVector = if (showLyrics) {
-                                        Icons.AutoMirrored.Filled.Article
-                                    } else {
-                                        Icons.AutoMirrored.Filled.Subject
-                                    },
-                                    contentDescription = if (showLyrics) {
-                                        stringResource(R.string.cd_show_score)
-                                    } else {
-                                        stringResource(R.string.cd_show_lyrics)
-                                    },
-                                )
-                            }
-                        }
-                        // Same three entries, same order as in the song list.
-                        SongOverflowMenu(
-                            onEdit = { showEditDialog = true },
-                            onAddToSetlist = { onAddToSetlist(song) },
-                            onDelete = { showDeleteConfirm = true },
-                        )
-                        if (isPagedDocument && pageCount > 0) {
-                            Text(
-                                text = stringResource(
-                                    R.string.msg_page_of,
-                                    currentPage.coerceAtLeast(0) + 1,
-                                    pageCount,
-                                ),
-                                style = MaterialTheme.typography.labelLarge,
-                                modifier = Modifier.padding(horizontal = 12.dp)
+                        if (settings.showPageButtons) {
+                            PageTurnButton(
+                                onClick = { goToPreviousPage() },
+                                enabled = canGoPrevious,
+                                isSongChange = previousIsSongChange,
+                                forward = false,
                             )
                         }
                     }
-                )
-            }
+                },
+                actions = {
+                    // A memo beside the score (capo, tuning). Behind a button rather than
+                    // an overlay, so it never covers a stave.
+                    if (song.notes.isNotBlank()) {
+                        Box {
+                            IconButton(onClick = { notesExpanded = !notesExpanded }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.StickyNote2,
+                                    contentDescription = stringResource(R.string.label_notes),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = notesExpanded,
+                                onDismissRequest = { notesExpanded = false },
+                            ) {
+                                Text(
+                                    text = song.notes,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier
+                                        .widthIn(max = 320.dp)
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
+                    }
+                    if (settings.showPageButtons) {
+                        PageTurnButton(
+                            onClick = { goToNextPage() },
+                            enabled = canGoNext,
+                            isSongChange = nextIsSongChange,
+                            forward = true,
+                        )
+                    }
+                },
+            )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         modifier = modifier
             .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown) {
-                    when (event.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_PAGE_DOWN,
-                        KeyEvent.KEYCODE_DPAD_RIGHT,
-                        KeyEvent.KEYCODE_DPAD_DOWN,
-                        KeyEvent.KEYCODE_SPACE,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_MEDIA_NEXT,
-                        KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                            goToNextPage()
-                            true
-                        }
-                        KeyEvent.KEYCODE_PAGE_UP,
-                        KeyEvent.KEYCODE_DPAD_LEFT,
-                        KeyEvent.KEYCODE_DPAD_UP,
-                        KeyEvent.KEYCODE_MEDIA_PREVIOUS,
-                        KeyEvent.KEYCODE_VOLUME_UP -> {
-                            goToPreviousPage()
-                            true
-                        }
-                        else -> false
-                    }
-                } else false
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                val keyCode = event.nativeKeyEvent.keyCode
+                val isVolumeKey = (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) ||
+                    (keyCode == KeyEvent.KEYCODE_VOLUME_UP)
+                // Not consumed when switched off, so the system still changes the volume.
+                if (isVolumeKey && !settings.volumeKeysTurnPages) return@onKeyEvent false
+
+                val forward = when (keyCode) {
+                    KeyEvent.KEYCODE_PAGE_DOWN,
+                    KeyEvent.KEYCODE_DPAD_RIGHT,
+                    KeyEvent.KEYCODE_DPAD_DOWN,
+                    KeyEvent.KEYCODE_SPACE,
+                    KeyEvent.KEYCODE_ENTER,
+                    KeyEvent.KEYCODE_MEDIA_NEXT,
+                    KeyEvent.KEYCODE_VOLUME_DOWN -> true
+                    KeyEvent.KEYCODE_PAGE_UP,
+                    KeyEvent.KEYCODE_DPAD_LEFT,
+                    KeyEvent.KEYCODE_DPAD_UP,
+                    KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                    KeyEvent.KEYCODE_VOLUME_UP -> false
+                    else -> return@onKeyEvent false
+                }
+                // Some pedals are wired the other way round, or mounted for the other
+                // foot; reversing here covers every key at once.
+                if (forward != settings.reversePedalDirection) goToNextPage() else goToPreviousPage()
+                true
             }
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Tap zones: lower third: left half = back, right half = forward.
-                // Everywhere else = toggle UI. Horizontal swipe turns pages when not zoomed.
-                .pointerInput(isPagedDocument, pageCount) {
+                // Tap zones cover only the bottom part of the screen: the upper area
+                // stays free for zooming and panning, where accidental touches happen.
+                // No swipe-to-turn on purpose, since it clashed with panning a zoomed page.
+                .pointerInput(
+                    settings.tapZonesEnabled,
+                    settings.tapZoneSize,
+                    settings.swapTapZones,
+                ) {
                     detectTapGestures { offset ->
                         focusRequester.requestFocus()
-                        val lowerThirdHeight = size.height * 2f / 3f
-                        if (offset.y > lowerThirdHeight) {
-                            if (offset.x < size.width / 2f) {
-                                goToPreviousPage()
-                            } else {
-                                goToNextPage()
-                            }
-                        } else {
-                            isUiVisible = !isUiVisible
-                        }
+                        if (!settings.tapZonesEnabled) return@detectTapGestures
+                        val zoneTop = size.height * (1f - settings.tapZoneSize.heightFraction)
+                        if (offset.y < zoneTop) return@detectTapGestures
+                        val leftHalf = offset.x < size.width / 2f
+                        if (leftHalf != settings.swapTapZones) goToPreviousPage() else goToNextPage()
                     }
-                }
-                .pointerInput(isPagedDocument, pageCount, localPageViews, currentPage) {
-                    if (!isPagedDocument) return@pointerInput
-                    val currentScale = localPageViews[currentPage.coerceAtLeast(0)]?.scale ?: 1f
-                    if (currentScale > 1.01f) return@pointerInput
-                    var dragAmount = 0f
-                    detectHorizontalDragGestures(
-                        onDragStart = { dragAmount = 0f },
-                        onDragEnd = {
-                            val threshold = size.width * 0.15f
-                            if (abs(dragAmount) > threshold) {
-                                if (dragAmount < 0) goToNextPage() else goToPreviousPage()
-                            }
-                        }
-                    ) { _, delta -> dragAmount += delta }
                 },
             contentAlignment = Alignment.Center
         ) {
@@ -439,7 +388,7 @@ fun SongDetailScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(if (isUiVisible) innerPadding else PaddingValues(16.dp))
+                            .padding(innerPadding)
                             .padding(16.dp)
                     ) {
                         Text(
@@ -473,7 +422,7 @@ fun SongDetailScreen(
                 song.sourceType == SongSource.MUSIC_XML -> {
                     MusicXmlView(
                         fileUri = song.fileUri,
-                        modifier = Modifier.padding(if (isUiVisible) innerPadding else PaddingValues(0.dp))
+                        modifier = Modifier.padding(innerPadding)
                     )
                 }
                 else -> {
@@ -486,7 +435,7 @@ fun SongDetailScreen(
                                 put(currentPage.coerceAtLeast(0), newView)
                             }
                         },
-                        modifier = Modifier.padding(if (isUiVisible) innerPadding else PaddingValues(0.dp)),
+                        modifier = Modifier.padding(innerPadding),
                         onPageCountReady = { count ->
                             pageCount = count
                         }
@@ -526,95 +475,100 @@ fun SongDetailScreen(
                     )
                 }
             }
+        }
+    }
+}
 
-            // Notes Overlay – a memo beside the score. Pointless over the text view,
-            // which has room for everything anyway.
-            if (isUiVisible && song.notes.isNotBlank() && !lyricsVisible) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
-                    shape = MaterialTheme.shapes.medium,
-                    modifier = Modifier
-                        // Bottom right, since the jump strip now owns the left edge.
-                        .align(Alignment.BottomEnd)
-                        .padding(innerPadding)
-                        .padding(16.dp)
-                        .fillMaxWidth(0.4f)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = stringResource(R.string.label_notes),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = song.notes,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-            // Compact widths have no navigation rail, so the setlist strip lives here
-            // instead. Without it there is no way to see the running order position on a
-            // phone, in portrait or landscape.
-            if (showSetlistStrip && setlistSongs.size > 1) {
-                SetlistStripHorizontal(
-                    songs = setlistSongs,
-                    currentSongId = song.id,
-                    flashAlpha = flashAlpha.value,
-                    onSongClick = { target -> onNavigateToSong(target, false) },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(innerPadding)
-                        .padding(start = 12.dp, top = 8.dp, end = 12.dp)
-                )
-            }
+/**
+ * Centre of the status bar: position on the first line, song title on the second.
+ *
+ * [setlistPosition] and [pagePosition] are (current, total) pairs, null when they do not
+ * apply. When neither is shown the title moves up to become the only, larger line, so
+ * the bar never shows an empty row above a small title.
+ */
+@Composable
+private fun SongStatusTitle(
+    song: Song,
+    settings: AppSettings,
+    setlistPosition: Pair<Int, Int>?,
+    pagePosition: Pair<Int, Int>?,
+) {
+    val songPart = setlistPosition?.takeIf { settings.showSongPosition }?.let { (current, total) ->
+        stringResource(R.string.msg_status_song, current, total)
+    }
+    val pagePart = pagePosition?.takeIf { settings.showPageNumber }?.let { (current, total) ->
+        stringResource(R.string.msg_status_page, current, total)
+    }
+    val firstLine = when {
+        (songPart != null) && (pagePart != null) ->
+            stringResource(R.string.msg_status_joined, songPart, pagePart)
+        else -> songPart ?: pagePart
+    }
 
-            // Page navigation bar, shown with the rest of the UI.
-            if (isUiVisible && isPagedDocument && pageCount > 1) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
-                    shape = MaterialTheme.shapes.extraLarge,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(innerPadding)
-                        .padding(bottom = 24.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        IconButton(
-                            onClick = { goToPreviousPage() },
-                            enabled = currentPage > 0 || previousSong != null
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.cd_previous_page),
-                            )
-                        }
-                        Text(
-                            text = stringResource(
-                                R.string.msg_page_of,
-                                currentPage.coerceAtLeast(0) + 1,
-                                pageCount,
-                            ),
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                        IconButton(
-                            onClick = { goToNextPage() },
-                            enabled = currentPage < pageCount - 1 || nextSong != null
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = stringResource(R.string.cd_next_page),
-                            )
-                        }
-                    }
-                }
-            }
+    if (firstLine == null) {
+        Text(
+            text = song.displayTitle,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        return
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = firstLine,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (settings.showSongTitle) {
+            Text(
+                text = song.displayTitle,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * ◀ / ▶ in the status bar. With [isSongChange] set it shows ⏮ / ⏭ instead, so the tap
+ * that leaves the current song is recognisable before it happens.
+ *
+ * At least 56 dp, larger than the default icon button: it is hit mid-performance,
+ * often without looking.
+ */
+@Composable
+private fun PageTurnButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    isSongChange: Boolean,
+    forward: Boolean,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.sizeIn(minWidth = 56.dp, minHeight = 56.dp),
+    ) {
+        when {
+            forward && isSongChange -> Icon(
+                Icons.Default.SkipNext,
+                contentDescription = stringResource(R.string.cd_next_song),
+            )
+            forward -> Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = stringResource(R.string.cd_next_page),
+            )
+            isSongChange -> Icon(
+                Icons.Default.SkipPrevious,
+                contentDescription = stringResource(R.string.cd_previous_song),
+            )
+            else -> Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.cd_previous_page),
+            )
         }
     }
 }

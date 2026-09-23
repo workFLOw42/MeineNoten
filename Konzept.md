@@ -22,22 +22,30 @@ Seitenaufbau, keine Fehlbedienung durch versehentliches Antippen.
 | Anzeige | Vorausladen der Nachbarseiten, Cache für 5 Seiten |
 | Anzeige | MusicXML-Rendering via OpenSheetMusicDisplay (WebView, offline) |
 | Anzeige | Textnotizen als eigener Song-Typ (ohne Datei) |
-| Blättern | Bluetooth-Pedal (HID-Tastencodes) |
-| Blättern | Wischen links/rechts |
-| Blättern | Tipp-Zonen: linkes/rechtes Drittel blättert, Mitte schaltet UI |
-| Blättern | Seitenleiste unten mit Pfeilen und Seitenzähler |
+| Anzeige | Zwei-Finger-Zoom (1- bis 5-fach) und Verschieben, pro Seite gespeichert |
+| Anzeige | Lied kann Notendatei *und* Liedtext tragen, umschaltbar im Menü |
+| Blättern | Bluetooth-Pedal (HID-Tastencodes), Richtung umkehrbar |
+| Blättern | Tippzonen im unteren Drittel: linke Hälfte zurück, rechte vor |
+| Blättern | Knöpfe ◀ ▶ in der Statusleiste, auf der letzten Seite ⏭ als Ankündigung |
 | Blättern | Randblitz als optische Rückmeldung |
 | Blättern | Am Liedende in der Setlist zum nächsten Lied weiterblättern |
-| Komfort | Letzte Seite wird pro Song gespeichert (Songliste), Setlists starten auf Seite 1 |
-| Komfort | Display-Timeout deaktiviert, solange Noten offen sind |
-| Komfort | Sprungleiste mit Positionsnummern, waagerecht auf dem Telefon, senkrecht auf dem Tablet |
+| Komfort | Setlists merken Lied und Seite, *Fortsetzen* bringt einen dorthin zurück |
+| Komfort | Display-Timeout deaktiviert, solange Noten offen sind (abschaltbar) |
+| Komfort | Setlist-Reihenfolge zum Springen im Navigationsmenü |
+| Komfort | Einstellungsseite für Statusleiste, Tippzonen, Pedal und Anzeige |
+| Komfort | Design wählbar: System, Hell, Dunkel |
 | Daten | Import kopiert Dateien in den App-Speicher |
 | Daten | Setlists: anlegen, sortieren, Notizen |
 | Daten | Lieder löschen samt Datei und Setlist-Verweisen |
 | Daten | Genre als freies Metadatum mit Vorschlags-Chips |
-| Daten | Songliste nach Genre und Setlist filtern, vier Sortiermodi |
-| Daten | Persistenz als JSON via kotlinx.serialization |
-| UI | Material 3, adaptiv (Navigation Bar / Rail je nach Ausrichtung) |
+| Daten | Songliste durchsuchen, nach Genre und Setlist filtern, fünf Sortiermodi |
+| Daten | Setlists durchsuchen (auch nach enthaltenen Liedern), nach Zeitraum filtern, drei Sortiermodi |
+| Daten | Setlists duplizieren, Lied entfernen mit Rückgängig |
+| Daten | Persistenz als JSON via kotlinx.serialization, Einstellungen via DataStore |
+| UI | Material 3, Navigationsmenü (Drawer) statt Leiste/Rail |
+| UI | Buchstabenleiste zum Springen in beiden Listen |
+| UI | Startbildschirm, nahtlos an den System-Splash anschließend |
+| UI | Deutsch und Englisch |
 | Auslieferung | Release-Build mit R8 verkleinert, signiert, Play-tauglich |
 | Auslieferung | Datenschutzerklärung über GitHub Pages veröffentlicht |
 
@@ -110,6 +118,12 @@ veröffentlicht wurde.
 | 2 | 1.0.1 | `targetSdk` 36, erstes veröffentlichtes Release |
 | 3 | 1.0.2 | R8-Verkleinerung |
 | 4 | 1.1.0 | Genre, Filter und Sortierung, Sprungleiste auf dem Telefon, Randblitz |
+| 5–10 | 1.1.1–1.1.6 | Setlist-Fortschritt, Zweisprachigkeit, Zoom pro Seite; 10 nicht hochgeladen |
+| 11 | 1.5.0 | Navigationsmenü, Einstellungen, Statusleiste, Design-Wahl, Startbildschirm |
+
+Seit 1.1.x steht die Nummer in `app/version.properties` und wird nach jedem
+erfolgreichen `:app:bundleRelease` automatisch erhöht. Die Datei gehört ins Repository,
+damit sich keine Nummer über Rechner oder Checkouts hinweg wiederholen kann.
 
 > [!IMPORTANT]
 > `compileSdk` steht auf 37 und muss dort bleiben, weil eine eingebundene
@@ -122,9 +136,9 @@ Ab API 36 lässt sich die randlose Darstellung nicht mehr abschalten; Inhalte la
 Status- und Navigationsleiste. Die App war darauf vorbereitet: `enableEdgeToEdge()` in
 `MainActivity`, und alle Screens geben das `innerPadding` ihres `Scaffold` weiter.
 
-Eine Stelle bleibt bewusst abweichend: In der Notenansicht wird das Padding nur bei
-sichtbarer Bedienoberfläche angewendet. Bei ausgeblendeter UI nutzen die Noten die ganze
-Fläche – gewollt, weil dort jeder Millimeter Notenhöhe zählt.
+In der Notenansicht bleibt die Statusleiste dauerhaft stehen und gibt ihr Padding immer
+weiter. Die frühere Ausnahme (Padding nur bei sichtbarer Bedienoberfläche) ist mit dem
+Aus-/Einblenden der Oberfläche entfallen.
 
 ---
 
@@ -159,23 +173,28 @@ werden: „Über" gehört zu „U", nicht hinter „Z".
 
 ### Filtern und Sortieren der Songliste
 
-Über der Liste sitzt eine einzeilige, waagerecht scrollbare Leiste. Sie trägt drei
+Über der Liste sitzen ein Suchfeld und eine einzeilige, waagerecht scrollbare Leiste. Die
+Suche findet Titel, Künstler, Version, Genre und Notiz. Die Leiste trägt drei
 Bedienelemente:
 
 | Element | Form | Warum diese Form |
 |---|---|---|
-| Sortierung | Menü | vier Modi, gegenseitig ausschließend – als Chips würden drei davon nur Platz kosten |
+| Sortierung | Menü | fünf Modi, gegenseitig ausschließend – als Chips würden vier davon nur Platz kosten |
 | Setlist-Filter | Menü | Setlist-Titel sind lang und würden die Genre-Chips vom Bildschirm drängen |
-| Genre-Filter | Chips | wenige, kurze Werte – ein Tipp statt zwei |
+| Genre-Filter | Menü | bei vielen vergebenen Genres sprengten Chips die Zeile |
 
-Die vier Sortiermodi:
+Die fünf Sortiermodi:
 
 | Modus | Ordnung |
 |---|---|
 | **Künstler** (Standard) | Künstler, dann Titel |
 | **Titel** | nur Titel – für Lieder, die man über die erste Zeile kennt, nicht über den Komponisten |
+| **Zuletzt** | zuletzt geöffnete zuerst |
 | **Genre** | nach Genre gruppiert, mit Zwischenüberschriften, innerhalb alphabetisch |
 | **Reihenfolge** | die Spielfolge der gewählten Setlist |
+
+Bei alphabetischer Sortierung steht rechts eine **Buchstabenleiste**; Tippen oder Ziehen
+springt zum Buchstaben, ein Umlaut zählt zu seinem Grundbuchstaben.
 
 Beide Filter sind **einfach-, nicht mehrfachauswahl**. Drei Genres zu kombinieren ist
 eine Katalogisierungsaufgabe, keine musikalische; die dafür nötigen dreistufigen Chips
@@ -203,7 +222,7 @@ Probe benannt („wir machen die Vier").
 
 > [!IMPORTANT]
 > Ein über den Setlist-Filter geöffnetes Lied bekommt die Setlist-Kennung mit. Sonst
-> würden Pedal-Weiterblättern und Sprungleiste fehlen, obwohl sichtbar eine Setlist
+> würden Pedal-Weiterblättern und Sprungliste fehlen, obwohl sichtbar eine Setlist
 > gefiltert ist – die Liste würde einen Kontext anzeigen, den die Notenansicht nicht
 > kennt.
 
@@ -218,10 +237,19 @@ Die leere Liste unterscheidet zwei Fälle, weil sie verschiedene Handlungen verl
 
 ### Sortierung der Setlists
 
-Nach Konzertdatum, **neuestes oben**. Wer die App aufschlägt, braucht fast immer das
-nächste oder letzte Konzert – nicht das von vorletztem Jahr.
+Standard ist das Konzertdatum, **neuestes oben**, gruppiert nach Jahr. Wer die App
+aufschlägt, braucht fast immer das nächste oder letzte Konzert – nicht das von
+vorletztem Jahr. Das **nächste anstehende** Programm ist farbig hervorgehoben.
 
 Setlists ohne Datum landen unten, untereinander alphabetisch nach Titel.
+
+Weitere Sortierungen: *Titel* und *Zuletzt gespielt*. Dazu ein Zeitraumfilter
+(*Kommend* / *Vergangen*) und eine Suche, die Titel, Notiz und die **Lieder** der Setlist
+durchsucht – „In welchem Programm war noch Amazing Grace?“.
+
+Im Setlist-Detail lassen sich Lieder per Pfeil verschieben und entfernen. Entfernen
+fragt nicht nach, sondern bietet für einige Sekunden *Rückgängig* an – der Schritt ist
+billig umzukehren, eine Rückfrage wäre bei jedem Aufräumen lästig.
 
 > [!IMPORTANT]
 > Das Datumsfeld ist derzeit freier Text („Ostern", „24.12."). Danach lässt sich nicht
@@ -273,71 +301,76 @@ weiterrutscht und es erst beim Anspielen merkt.
 > Songliste geöffnet bleibt das Verhalten unverändert an den Liedgrenzen stehen.
 > Technisch über die optionale Angabe der Setlist-Kennung in der Route.
 
-### Sprungleiste in der Notenansicht
+### Springen innerhalb der Setlist
 
-Wurde das Lied aus einer Setlist geöffnet, erscheint eine Leiste mit den
-**Positionsnummern aller Lieder der Setlist**. Ein Tipp öffnet das betreffende Lied,
-immer auf Seite 1.
+Wurde das Lied aus einer Setlist geöffnet, zeigt das **Navigationsmenü** unter den
+Lied-Aktionen die ganze Reihenfolge („4. Großer Gott, wir loben dich“). Ein Tipp öffnet
+das betreffende Lied, immer auf Seite 1; das aktuelle ist markiert.
 
 Zweck: In einem Gottesdienst wird die Reihenfolge oft spontan geändert oder ein Lied
-übersprungen. Ohne Sprungleiste heißt das: zurück zur Setlist, suchen, öffnen.
-
-Die Leiste wechselt mit der Fensterbreite die Position, weil sie sich den Platz mit der
-Navigation teilt:
-
-| Fensterbreite | Navigation | Sprungleiste |
-|---|---|---|
-| kompakt (Telefon) | Leiste unten | waagerecht am oberen Rand der Notenansicht |
-| mittel / groß (Tablet) | Rail seitlich | senkrecht unten in der Rail |
-
-Eigenschaften:
-
-*   Das aktuelle Lied ist hervorgehoben (gedecktes Grün, weiße Schrift, fett).
-*   Die Leiste scrollt die aktuelle Position automatisch in den sichtbaren Bereich,
-    damit auch lange Setlists bedienbar bleiben.
-*   In der waagerechten Fassung trägt die aktuelle Kachel zusätzlich die Zählung
-    („4/12"), weil dort weniger Nachbarn gleichzeitig sichtbar sind.
-*   Bei weniger als zwei Liedern entfällt die Leiste.
+übersprungen. Ohne Sprungliste heißt das: zurück zur Setlist, suchen, öffnen.
 
 > [!NOTE]
-> Ursprünglich waren **Vorschaubilder** der ersten Notenseite geplant. Verworfen, weil
-> eine auf 120 px verkleinerte Chornote nicht wiedererkennbar ist – man sieht graue
-> Streifen, keine Melodie. Die Positionsnummer trifft, wie Lieder in der Probe
-> tatsächlich benannt werden („wir machen die Vier vor der Sechs"), und kostet weder
-> Speicher noch Rechenzeit.
+> Bis 1.1.x war das eine **Sprungleiste** aus Positionsnummern – senkrecht in der
+> Navigationsschiene, auf dem Telefon waagerecht über den Noten. Mit dem Wechsel auf ein
+> Navigationsmenü gibt es keine Schiene mehr, und die waagerechte Leiste kostete
+> Notenhöhe. Im Menü stehen Titel statt bloßer Nummern, was bei spontanen Änderungen
+> schneller zu lesen ist. `SetlistStrip.kt` ist seitdem ungenutzt.
+
+### Navigationsmenü
+
+Songliste, Setlists und Einstellungen liegen in einem **Drawer** hinter dem Menüsymbol
+oben links, nicht mehr in Leiste oder Schiene. Die Notenansicht trägt so außer ihrer
+Statusleiste keine dauerhafte Bedienfläche, und das Menü ist auf Telefon und Tablet
+gleich.
+
+Bei geöffnetem Lied enthält es zusätzlich *Bearbeiten*, *Zur Setlist hinzufügen*,
+*Liedtext/Noten anzeigen* (nur wenn beides vorhanden) und *Löschen*. Abschnitte ohne
+Ziel erscheinen nicht.
+
+In der Notenansicht ist die Wischgeste zum Öffnen abgeschaltet – sie würde mit dem
+Verschieben einer gezoomten Seite kollidieren. Dort öffnet nur das Symbol.
 
 ### Erkennbarkeit des aktuellen Liedes
 
-Während des Spielens muss ohne Nachdenken ablesbar sein, in welchem Lied man sich
-befindet. Dafür gibt es zwei unabhängige Anzeigen, damit keine Bildschirmgröße und
-keine Ausrichtung ohne Hinweis bleibt:
+Während des Spielens muss ohne Nachdenken ablesbar sein, in welchem Lied und auf welcher
+Seite man sich befindet. Das übernimmt die **Statusleiste**, die dauerhaft sichtbar
+bleibt:
 
-1.  Die hervorgehobene Kachel der Sprungleiste.
-2.  Die Kopfzeile, die bei Liedern aus einer Setlist die Position voranstellt:
-    „4/12 · Großer Gott, wir loben dich".
+*   erste Zeile: Position in der Setlist und Seite („Lied 4/12 · Seite 2/3“),
+*   zweite Zeile: der Liedtitel.
+
+Jeder Teil lässt sich in den Einstellungen abschalten. Bleibt nur der Titel übrig,
+rückt er in die erste Zeile und wird größer, damit keine leere Zeile stehen bleibt.
 
 > [!IMPORTANT]
-> Beide Anzeigen verschwinden beim Ausblenden der Bedienoberfläche – gewollt, weil dann
-> die ganze Fläche den Noten gehört. Die Zuordnung ist mit einem Tipp in die Bildmitte
-> jederzeit wieder da.
+> Früher ließ sich die Oberfläche mit einem Tipp in die Bildmitte ausblenden. Das ist
+> entfallen: Die Statusleiste zeigt genau das, was beim Spielen gebraucht wird, und ein
+> versehentlicher Tipp versteckte bisher ausgerechnet diese Information.
 
 ### Startseite beim Öffnen
 
-Beim Öffnen eines Liedes gibt es zwei berechtigte Erwartungen, die sich widersprechen.
-Deshalb entscheidet der Weg, über den das Lied geöffnet wurde:
+Beim Öffnen eines Liedes entscheidet der Weg, über den es geöffnet wurde:
 
 | Geöffnet über | Startseite | Begründung |
 |---|---|---|
-| Songliste | zuletzt gelesene Seite | Üben: man macht dort weiter, wo man aufgehört hat |
-| Setlist | **Seite 1** | Auftritt: das Lied wird von vorne angestimmt |
-| Sprungleiste | Seite 1 | wie Setlist |
+| Songliste | Seite 1 | Nachschlagen, nicht Fortsetzen eines Auftritts |
+| Setlist, Lied angetippt | Seite 1 | Auftritt: das Lied wird von vorne angestimmt |
+| Setlist, *Fortsetzen* | gespeicherte Seite | nach einer Unterbrechung genau dort weiter |
+| Sprungliste im Menü | Seite 1 | wie Setlist |
 | Vorblättern aus dem Vorgänger | Seite 1 | der Durchlauf folgt der Partitur |
 | Zurückblättern aus dem Nachfolger | letzte Seite | man blättert dorthin, wo man hinsieht |
 
+Der Fortschritt (`lastSongId`, `lastPage`) liegt an der **Setlist**, nicht am Lied:
+Dasselbe Lied kann in mehreren Programmen stehen, und Nachschlagen in der Songliste darf
+die Position eines halb gespielten Gottesdienstes nicht verschieben. Ist die letzte
+Seite des letzten Liedes erreicht, wird der Fortschritt gelöscht – beim nächsten Mal
+beginnt das Programm oben.
+
 > [!WARNING]
-> Das Merken der letzten Seite ist beim Auftritt keine Hilfe, sondern eine Falle: Nach
+> Eine automatisch gemerkte letzte Seite pro Lied wäre beim Auftritt eine Falle: Nach
 > einer Probe, in der das Lied auf Seite 2 endete, stünde beim Gottesdienst die falsche
-> Seite auf dem Pult – und der Fehler fällt erst beim Einsatz auf.
+> Seite auf dem Pult. Deshalb ist Fortsetzen immer eine ausdrückliche Wahl.
 
 ---
 
@@ -349,18 +382,38 @@ sind bewusst **mehrere Wege parallel** umgesetzt, statt einen zu erzwingen.
 | Eingabe | Vorwärts | Rückwärts |
 |---|---|---|
 | Tasten / Pedal | `PAGE_DOWN`, `DPAD_RIGHT`, `DPAD_DOWN`, `SPACE`, `ENTER`, `MEDIA_NEXT`, `VOLUME_DOWN` | `PAGE_UP`, `DPAD_LEFT`, `DPAD_UP`, `MEDIA_PREVIOUS`, `VOLUME_UP` |
-| Wischen | nach links | nach rechts |
-| Tippen | rechtes Bildschirmdrittel | linkes Bildschirmdrittel |
-| Leiste unten | Pfeil rechts | Pfeil links |
+| Tippzonen | rechte Hälfte unten | linke Hälfte unten |
+| Statusleiste | ▶ (⏭ vor Liedwechsel) | ◀ (⏮ vor Liedwechsel) |
 
 Zur Tastenliste: Die Lautstärke- und Medientasten sind absichtlich dabei. Viele
 preiswerte Seitenwender melden sich beim System nicht als Pfeiltasten, sondern als
 genau diese Codes. Wer ein solches Pedal kauft, soll es anschließen können, ohne
-vorher die Firmware zu prüfen.
+vorher die Firmware zu prüfen. Wer die Lautstärketasten für die Lautstärke braucht,
+schaltet sie ab – sie werden dann nicht verbraucht und erreichen das System. *Richtung
+umkehren* dreht alle Tasten auf einmal um, für verkehrt verdrahtete Pedale oder den
+anderen Fuß.
 
-Zu den Tipp-Zonen: Das mittlere Drittel blendet die Bedienleisten ein und aus. Blättern
-liegt an den Rändern, weil man dort mit der Greifhand hinkommt, ohne den Blick von den
-Noten zu nehmen.
+Zu den Tippzonen: Sie liegen im **unteren Drittel** (einstellbar: untere Hälfte, ganze
+Höhe), links zurück, rechts vor, auf Wunsch getauscht. Der obere Bereich bleibt frei für
+Zoomen und Verschieben, wo versehentliche Berührungen passieren.
+
+**Wischen blättert nicht mehr um.** Es kollidierte mit dem Verschieben einer gezoomten
+Seite – wer eine Zeile ins Bild zieht, will nicht umblättern. Aus demselben Grund gibt
+es keinen Doppeltipp-Zoom: Ein Doppeltipp-Detektor muss jeden einzelnen Tipp rund
+300 ms zurückhalten, was die Tippzonen träge machen würde.
+
+Die Knöpfe in der Statusleiste sind mindestens 56 dp groß, weil sie mitten im Spiel und
+oft ohne Hinsehen getroffen werden. Auf der letzten Seite zeigt ▶ als ⏭ an, dass der
+nächste Tipp das Lied wechselt – bevor er passiert.
+
+### Zoom pro Seite
+
+Zwei-Finger-Zoom von 1- bis 5-fach, mit einem Finger verschiebbar, an den Rändern
+begrenzt. Zoom und Ausschnitt werden **pro Seite** am Lied gespeichert (`pageViews`),
+verzögert um 300 ms, damit das Speichern die Geste nicht ruckeln lässt. Gescannte Noten
+haben oft pro Seite einen anderen Rand; ein einziger Zoom fürs ganze Lied passt deshalb
+selten. *Zoom zurücksetzen* steht im Bearbeiten-Dialog; mit *Zoom pro Seite merken* aus
+gilt der Zoom nur, solange das Lied offen ist.
 
 ### Optische Rückmeldung
 
@@ -368,28 +421,19 @@ Jeder Seitenwechsel wird optisch bestätigt (50 ms Anstieg, 500 ms Ausklang). Da
 nötig, weil zwei Notenseiten einander sehr ähnlich sehen – ohne Rückmeldung tritt man
 im Zweifel ein zweites Mal und ist zwei Seiten zu weit.
 
-Die Rückmeldung besteht aus zwei Teilen, die sich ergänzen:
-
-| Teil | Wo | Wirksam bei |
-|---|---|---|
-| **Randblitz** | 6 dp breiter grüner Rahmen um die Notenfläche | immer |
-| Kachelblitz | aktuelle Position der Sprungleiste hellt auf | nur bei Setlists |
-
-> [!IMPORTANT]
-> Der Randblitz ist der verlässliche Teil: Er hängt nicht an einer Setlist und bleibt
-> auch bei ausgeblendeter Bedienoberfläche sichtbar. Beim Üben eines einzelnen Liedes
-> aus der Songliste ist er die einzige Rückmeldung – die Sprungleiste existiert dort
-> nicht.
+Die Rückmeldung ist ein **Randblitz**: ein 6 dp breiter grüner Rahmen um die
+Notenfläche. Er hängt nicht an einer Setlist und wirkt deshalb auch beim Üben eines
+einzelnen Liedes. Abschaltbar in den Einstellungen.
 
 > [!NOTE]
 > Zuerst war es ein grüner Schleier über den **ganzen** Bildschirm. Verworfen, weil er
 > die Noten genau in dem Moment überlagerte, in dem sie gebraucht werden. Die Breite von
 > 6 dp ist der Kompromiss: im peripheren Blickfeld erkennbar, ohne je eine Notenzeile zu
-> verdecken. Beide Blitze nutzen denselben Grünton (`#7BA07E`), damit sie als ein
-> Signal gelesen werden und nicht als zwei Ereignisse.
+> verdecken. Der frühere zweite Teil, ein Aufhellen der Sprungleisten-Kachel, ist mit
+> der Sprungleiste entfallen.
 
 Der Liedwechsel ist der größere Sprung und wird deshalb zusätzlich benannt – der Titel
-des neuen Liedes erscheint für 1,5 Sekunden in der Bildmitte.
+des neuen Liedes erscheint für 1,5 Sekunden in der Bildmitte (ebenfalls abschaltbar).
 
 ---
 
@@ -411,8 +455,11 @@ data class Song(
     val bpm: Int = 120,              // derzeit ungenutzt
     val timeSignature: String = "4/4",  // derzeit ungenutzt
     val totalBars: Int = 0,          // derzeit ungenutzt
-    val lastPage: Int = 0,           // zuletzt gelesene Seite
-    val notes: String = ""
+    val lastPage: Int = 0,           // nicht mehr geschrieben, nur noch gelesen
+    val pageViews: Map<Int, PageView> = emptyMap(),  // Zoom/Ausschnitt pro Seite
+    val notes: String = "",          // kurze Notiz neben den Noten ("Capo 2")
+    val lyrics: String = "",         // Liedtext/Akkorde, unabhängig von fileUri
+    val lastOpenedAt: Long = 0,      // für Sortierung "Zuletzt"
 ) {
     /** Künstler, sonst Titel – bestimmt die Position in der Liste. */
     val sortKey: String get() = artist.ifBlank { title }
@@ -424,9 +471,17 @@ data class Setlist(
     val title: String,
     val date: String = "",           // "yyyy-MM-dd", leer = ohne Termin
     val songIds: List<String>,       // geordnet
-    val notes: String = ""
+    val notes: String = "",
+    val lastSongId: String? = null,  // Fortschritt: Lied …
+    val lastPage: Int = 0,           // … und Seite, zum Fortsetzen
+    val lastPlayedAt: Long = 0L,     // für Sortierung "Zuletzt gespielt"
 )
 ```
+
+Einstellungen liegen **nicht** in diesen JSON-Dateien, sondern als `AppSettings` in
+Preferences-DataStore. Sie sind Gerätevorlieben, keine Notendaten. Alle Standardwerte
+entsprechen dem Verhalten vor Einführung der Einstellungen, ein Update ändert also
+nichts, solange nichts umgestellt wird.
 
 ### Änderung am Datumsfeld
 
@@ -515,7 +570,27 @@ in solchen Fällen weiß, was während einer Probe nicht diagnostizierbar ist.
 ### Display-Management
 
 `FLAG_KEEP_SCREEN_ON` wird beim Betreten der Notenansicht gesetzt und beim Verlassen
-wieder entfernt. Der Bildschirm bleibt also nur an, solange Noten offen sind.
+wieder entfernt. Der Bildschirm bleibt also nur an, solange Noten offen sind. Mit
+*Bildschirm bleibt an* aus gilt der normale System-Timeout.
+
+### Design und Startbildschirm
+
+Das Design folgt dem System oder ist fest auf Hell bzw. Dunkel gestellt. Die Symbole in
+Status- und Navigationsleiste folgen dem **App**-Design, nicht dem des Geräts – sonst
+stünden bei „Hell“ auf einem dunkel eingestellten Telefon helle Symbole auf hellem Grund.
+
+Der System-Splash (ab Android 12 nicht abschaltbar) bleibt stehen, bis DataStore die
+Einstellungen geliefert hat. So blitzt nie ein Frame im falschen Design auf. Darunter
+liegt ein Compose-Startbildschirm, der die Note in exakt gleicher Größe und Lage zeigt;
+der Wechsel ist unsichtbar, danach blenden Name und Version ein. Er erscheint nur beim
+Kaltstart (nicht beim Drehen oder nach der Dateiauswahl), verschwindet nach 1,2 s und
+lässt sich mit einem Tipp überspringen.
+
+### Sprachen
+
+Alle Texte liegen in Ressourcen: Englisch als Standard (`values`), Deutsch in
+`values-de`. Die Sortierung bleibt unabhängig von der Sprache deutsch (Collator), damit
+die Reihenfolge der Sammlung nicht mit der Gerätesprache springt.
 
 ### Sortierung
 
@@ -569,30 +644,40 @@ app/src/main/
 ├── assets/osmd/              OpenSheetMusicDisplay (offline)
 ├── keepRules/rules.keep      R8-Regeln für Serialisierung und WebView-Brücke
 └── java/de/workflow42/meinenoten/
-    ├── MainActivity.kt
+    ├── MainActivity.kt            Splash, Design, Startbildschirm
     ├── data/
-    │   └── SongRepository.kt      Import, JSON-Persistenz, Löschen
+    │   ├── SongRepository.kt      Import, JSON-Persistenz, Löschen
+    │   └── AppSettings.kt         Einstellungen, DataStore
     ├── model/
     │   ├── Song.kt
-    │   └── Setlist.kt
+    │   ├── Setlist.kt
+    │   └── PageView.kt            Zoom und Ausschnitt einer Seite
     └── ui/
-        ├── MainApp.kt             Navigation, adaptives Layout
+        ├── MainApp.kt             Navigation, Drawer, Dialoge
+        ├── AppDrawer.kt           Inhalt des Navigationsmenüs
         ├── Navigator.kt           Backstack
         ├── NavigationState.kt     Routen
         ├── components/
-        │   ├── PdfView.kt         Rendering, Cache, Vorausladen
+        │   ├── PdfView.kt         Rendering, Cache, Vorausladen, Zoom
         │   ├── MusicXmlView.kt    WebView-Brücke zu OSMD
-        │   ├── SetlistStrip.kt    Sprungleiste, senkrecht und waagerecht
-        │   ├── SongFilterBar.kt   Filter- und Sortierleiste
+        │   ├── SongFilterBar.kt   Such-, Filter- und Sortierleiste Songs
+        │   ├── SetlistFilterBar.kt  dasselbe für Setlists
+        │   ├── AlphabetIndex.kt   Buchstabenleiste zum Springen
+        │   ├── SongActions.kt     Menü, Bearbeiten- und Löschen-Dialog
+        │   ├── VersionFooter.kt   Versionszeile
+        │   ├── SetlistStrip.kt    frühere Sprungleiste, derzeit ungenutzt
         │   ├── GenreChips.kt      Vorschläge vergebener Genres
         │   └── DateField.kt       Datumsauswahl
         ├── util/
-        │   ├── SortUtils.kt       Collator-Sortierung, Sortiermodi
+        │   ├── SortUtils.kt       Collator-Sortierung, Sortiermodi Songs
+        │   ├── SetlistUtils.kt    Suche, Zeitraum, Sortierung Setlists
         │   └── DateUtils.kt       Datum deuten und anzeigen
         └── screens/
+            ├── LaunchScreen.kt
             ├── SongListScreen.kt
             ├── SongDetailScreen.kt    Anzeige + Eingabekonzept
-            └── SetlistScreen.kt       Übersicht und Setlist-Detail
+            ├── SetlistScreen.kt       Übersicht und Setlist-Detail
+            └── SettingsScreen.kt
 ```
 
 > [!NOTE]
@@ -608,9 +693,8 @@ app/src/main/
 |---|---|---|
 | Übersetzen | `:app:assembleDebug` | erfolgreich |
 | Installation | Emulator (Tab S6 Lite, 1200×2000) | erfolgreich |
-| Blättern per Wischen | mehrseitiges PDF, Sichtprüfung | Seite wechselt |
-| Blättern per Tipp-Zone | linkes Drittel | Seite wechselt zurück |
-| Seitenzähler | Kopfzeile und Leiste unten | zeigt korrekt „1 / 2" |
+| Blättern per Tippzone | linke Hälfte unten | Seite wechselt zurück |
+| Seitenzähler | Statusleiste | zeigt korrekt „Seite 1/2“ |
 | Laufzeitfehler | Logcat | keine Fehler, keine Abstürze |
 
 ### Prüfung des verkleinerten Release-Builds
@@ -664,8 +748,24 @@ bestehende Datenbestände nach dem Umstieg auf R8 lesbar bleiben.
 > tatsächliche Darstellung im verkleinerten Build wurde aber nicht gesehen. Das sollte
 > mit einer `.musicxml`-Datei nachgeholt werden.
 
-Automatisierte Tests existieren derzeit nur als Projektvorlagen
-(`ExampleUnitTest`, `ExampleInstrumentedTest`) und prüfen keine App-Logik.
-Sinnvolle erste Kandidaten wären die Dateityp-Erkennung im Repository und das
-Entpacken von `.mxl`, da beide reine Logik ohne UI sind.
+### Stand von Version 1.5.0 (`versionCode` 11)
+
+| Was | Wie geprüft | Ergebnis |
+|---|---|---|
+| Unit-Tests | `:app:testDebugUnitTest` | 38 bestanden, 0 fehlgeschlagen |
+| Release-Bundle | `:app:bundleRelease` | erfolgreich, 5,6 MB |
+| Signatur | `jarsigner -verify` | „JAR verifiziert“ |
+| Versionszähler | `version.properties` | nach dem Build auf 12 / 1.5.1 erhöht |
+
+> [!WARNING]
+> Die neuen Felder (`lastPlayedAt`, `pageViews`, `lyrics`, `lastOpenedAt`) fallen unter
+> die bestehende Keep-Rule für die Modelle. Der Nachweis über `mapping.txt` und ein
+> Neustart des Release-Builds mit vorhandenen Daten sollte für 1.5.0 wiederholt werden,
+> ebenso ein Update von 1.1.x mit bestehender `songs.json`.
+
+Automatisierte Tests decken inzwischen reine Logik ab: Gruppierung und Sortierung der
+Songliste (`SongListGroupingTest`), Suche, Zeitraum und Sortierung der Setlists
+(`SetlistListTest`) sowie Zoom-Daten und Rückwärtskompatibilität alter JSON-Dateien
+(`SongZoomAndBackwardCompatibilityTest`). Noch ohne Tests sind die Dateityp-Erkennung
+im Repository und das Entpacken von `.mxl`.
 

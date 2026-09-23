@@ -23,6 +23,7 @@
     <string name="action_resume">Resume: %1$s</string>
     <string name="action_resume_with_page">Resume: %1$s (p. %2$d)</string>
     <string name="action_create_new_setlist">Create new setlist …</string>
+    <string name="action_duplicate">Duplicate</string>
 
     <!-- Field labels -->
     <string name="label_title">Title</string>
@@ -49,6 +50,15 @@
     <string name="sort_recent">Recent</string>
     <string name="sort_genre">Genre</string>
     <string name="sort_setlist_order">Running order</string>
+    <string name="sort_date">Date</string>
+    <string name="sort_last_played">Last played</string>
+
+    <!-- Setlist filters -->
+    <string name="label_period">Period</string>
+    <string name="period_upcoming">Upcoming</string>
+    <string name="period_past">Past</string>
+    <string name="label_contains_song">Contains song</string>
+    <string name="label_next_setlist">Next</string>
 
     <!-- Navigation -->
     <string name="nav_songs">Songs</string>
@@ -62,6 +72,7 @@
     <string name="dialog_new_setlist_title">New setlist</string>
     <string name="dialog_edit_setlist_title">Edit setlist</string>
     <string name="dialog_add_to_setlist_title">Add to setlist</string>
+    <string name="dialog_delete_setlist_title">Delete setlist?</string>
 
     <!-- Messages -->
     <string name="msg_delete_song_confirm">"%1$s" will be permanently removed.</string>
@@ -69,7 +80,7 @@
     <string name="msg_song_removed">"%1$s" removed</string>
     <string name="msg_included_in_setlists">Included in setlists:</string>
     <string name="msg_not_in_any_setlist">Not in any setlist yet.</string>
-    <string name="msg_lyrics_toggle_hint">Can be toggled from the song\'s overflow menu.</string>
+    <string name="msg_lyrics_toggle_hint">Can be toggled from the menu (☰) of the score view.</string>
     <string name="msg_lyrics_fallback_hint">Shown as lyrics as long as no score is attached.</string>
     <string name="msg_file_musicxml">MusicXML file attached</string>
     <string name="msg_file_pdf">PDF attached</string>
@@ -83,6 +94,17 @@
     <string name="msg_position_of_total">%1$d/%2$d</string>
     <string name="msg_song_of_total">%1$d/%2$d · %3$s</string>
     <string name="msg_list_label">%1$s – %2$s</string>
+    <string name="msg_nav_with_count">%1$s (%2$d)</string>
+    <string name="msg_status_song">Song %1$d / %2$d</string>
+    <string name="msg_status_page">Page %1$d / %2$d</string>
+    <string name="msg_status_joined">%1$s · %2$s</string>
+    <string name="msg_drawer_song">%1$02d  %2$s</string>
+    <string name="msg_setlist_in_progress">In progress (song %1$d)</string>
+    <string name="msg_setlist_copy_title">%1$s (copy)</string>
+    <string name="msg_delete_setlist_confirm">"%1$s" will be removed. The songs themselves are kept.</string>
+
+    <!-- Navigation drawer -->
+    <string name="drawer_section_this_song">This song</string>
 
     <!-- Empty states -->
     <string name="empty_no_songs">No songs yet.</string>
@@ -90,10 +112,12 @@
     <string name="empty_no_filter_results">No songs match the filter.</string>
     <string name="empty_no_setlists">No setlists yet.</string>
     <string name="empty_no_setlists_available">No setlists available yet.</string>
+    <string name="empty_no_setlist_filter_results">No setlists match the filter.</string>
+    <string name="empty_no_date">No date</string>
     <string name="empty_no_genre">No genre</string>
     <string name="empty_select_song">Select a song</string>
     <string name="empty_select_setlist">Select a setlist</string>
-    <string name="empty_no_content">No lyrics and no score yet. Use the overflow menu to attach a PDF or MusicXML file, or to enter the lyrics.</string>
+    <string name="empty_no_content">No lyrics and no score yet. Use Edit in the menu (☰) to attach a PDF or MusicXML file, or to enter the lyrics.</string>
 
     <!-- Badges -->
     <string name="badge_score">Score</string>
@@ -126,6 +150,40 @@
     <string name="cd_previous_page">Previous page</string>
     <string name="cd_next_page">Next page</string>
     <string name="cd_page_number">Page %1$d</string>
+    <string name="cd_open_menu">Open menu</string>
+    <string name="cd_next_song">Next song</string>
+    <string name="cd_previous_song">Previous song</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_status_bar">Status bar in score view</string>
+    <string name="settings_show_song_title">Show song title (2nd line)</string>
+    <string name="settings_show_song_position">Show position \"Song x/n\"</string>
+    <string name="settings_show_page_number">Show page \"Page x/n\"</string>
+    <string name="settings_show_page_buttons">Page-turn buttons ◀ ▶</string>
+    <string name="settings_announce_song_change">Announce song change on last page (⏭)</string>
+    <string name="settings_section_page_turning">Page turning</string>
+    <string name="settings_tap_zones">Tap zones at the bottom</string>
+    <string name="settings_tap_zone_size">Tap zone size</string>
+    <string name="settings_tap_zone_lower_third">Lower third</string>
+    <string name="settings_tap_zone_lower_half">Lower half</string>
+    <string name="settings_tap_zone_full_height">Full height</string>
+    <string name="settings_swap_tap_zones">Swap tap zones (right = back)</string>
+    <string name="settings_page_turn_flash">Green edge on page turn</string>
+    <string name="settings_song_change_banner">Show title on song change</string>
+    <string name="settings_section_pedal">Pedal &amp; keys</string>
+    <string name="settings_volume_keys">Volume keys turn pages</string>
+    <string name="settings_reverse_direction">Reverse direction</string>
+    <string name="settings_section_display">Display</string>
+    <string name="settings_keep_screen_on">Keep screen on</string>
+    <string name="settings_remember_zoom">Remember zoom per page</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_version">Version %1$s (%2$d)</string>
+    <!-- Author credit, identical in every language. -->
+    <string name="settings_by" translatable="false">by workFLOw42</string>
 
     <!-- Defaults -->
     <string name="default_song_title">New Song</string>

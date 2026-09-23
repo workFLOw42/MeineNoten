@@ -22,6 +22,7 @@
     <string name="action_resume">Fortsetzen: %1$s</string>
     <string name="action_resume_with_page">Fortsetzen: %1$s (S. %2$d)</string>
     <string name="action_create_new_setlist">Neue Setlist anlegen …</string>
+    <string name="action_duplicate">Duplizieren</string>
 
     <!-- Feldbeschriftungen -->
     <string name="label_title">Titel</string>
@@ -48,6 +49,15 @@
     <string name="sort_recent">Zuletzt</string>
     <string name="sort_genre">Genre</string>
     <string name="sort_setlist_order">Reihenfolge</string>
+    <string name="sort_date">Datum</string>
+    <string name="sort_last_played">Zuletzt gespielt</string>
+
+    <!-- Setlist-Filter -->
+    <string name="label_period">Zeitraum</string>
+    <string name="period_upcoming">Kommende</string>
+    <string name="period_past">Vergangene</string>
+    <string name="label_contains_song">Enthält Lied</string>
+    <string name="label_next_setlist">Als Nächstes</string>
 
     <!-- Navigation -->
     <string name="nav_songs">Lieder</string>
@@ -61,6 +71,7 @@
     <string name="dialog_new_setlist_title">Neue Setlist</string>
     <string name="dialog_edit_setlist_title">Setlist bearbeiten</string>
     <string name="dialog_add_to_setlist_title">Zu Setlist hinzufügen</string>
+    <string name="dialog_delete_setlist_title">Setlist löschen?</string>
 
     <!-- Meldungen -->
     <string name="msg_delete_song_confirm">„%1$s“ wird dauerhaft entfernt.</string>
@@ -68,7 +79,7 @@
     <string name="msg_song_removed">„%1$s“ entfernt</string>
     <string name="msg_included_in_setlists">In Setlisten enthalten:</string>
     <string name="msg_not_in_any_setlist">Noch in keiner Setlist.</string>
-    <string name="msg_lyrics_toggle_hint">Über die drei Punkte im Lied umschaltbar.</string>
+    <string name="msg_lyrics_toggle_hint">Im Menü (☰) der Notenansicht umschaltbar.</string>
     <string name="msg_lyrics_fallback_hint">Wird als Liedtext angezeigt, solange keine Noten hinterlegt sind.</string>
     <string name="msg_file_musicxml">MusicXML-Datei hinterlegt</string>
     <string name="msg_file_pdf">PDF hinterlegt</string>
@@ -82,6 +93,17 @@
     <string name="msg_position_of_total">%1$d/%2$d</string>
     <string name="msg_song_of_total">%1$d/%2$d · %3$s</string>
     <string name="msg_list_label">%1$s – %2$s</string>
+    <string name="msg_nav_with_count">%1$s (%2$d)</string>
+    <string name="msg_status_song">Lied %1$d / %2$d</string>
+    <string name="msg_status_page">Seite %1$d / %2$d</string>
+    <string name="msg_status_joined">%1$s · %2$s</string>
+    <string name="msg_drawer_song">%1$02d  %2$s</string>
+    <string name="msg_setlist_in_progress">Läuft (Lied %1$d)</string>
+    <string name="msg_setlist_copy_title">%1$s (Kopie)</string>
+    <string name="msg_delete_setlist_confirm">„%1$s“ wird entfernt. Die Lieder selbst bleiben erhalten.</string>
+
+    <!-- Navigationsmenü -->
+    <string name="drawer_section_this_song">Dieses Lied</string>
 
     <!-- Leere Zustände -->
     <string name="empty_no_songs">Noch keine Lieder vorhanden.</string>
@@ -89,10 +111,12 @@
     <string name="empty_no_filter_results">Keine Lieder passen zum Filter.</string>
     <string name="empty_no_setlists">Noch keine Setlisten vorhanden.</string>
     <string name="empty_no_setlists_available">Noch keine Setlisten vorhanden.</string>
+    <string name="empty_no_setlist_filter_results">Keine Setlisten passen zum Filter.</string>
+    <string name="empty_no_date">Ohne Datum</string>
     <string name="empty_no_genre">Ohne Genre</string>
     <string name="empty_select_song">Lied auswählen</string>
     <string name="empty_select_setlist">Setlist auswählen</string>
-    <string name="empty_no_content">Noch kein Liedtext und keine Noten. Über die drei Punkte lässt sich eine PDF- oder MusicXML-Datei hinzufügen oder der Text eintragen.</string>
+    <string name="empty_no_content">Noch kein Liedtext und keine Noten. Über „Bearbeiten“ im Menü (☰) lässt sich eine PDF- oder MusicXML-Datei hinzufügen oder der Text eintragen.</string>
 
     <!-- Abzeichen -->
     <string name="badge_score">Noten</string>
@@ -125,6 +149,38 @@
     <string name="cd_previous_page">Vorherige Seite</string>
     <string name="cd_next_page">Nächste Seite</string>
     <string name="cd_page_number">Seite %1$d</string>
+    <string name="cd_open_menu">Menü öffnen</string>
+    <string name="cd_next_song">Nächstes Lied</string>
+    <string name="cd_previous_song">Vorheriges Lied</string>
+
+    <!-- Einstellungen -->
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_section_status_bar">Statusleiste in der Notenansicht</string>
+    <string name="settings_show_song_title">Liedtitel anzeigen</string>
+    <string name="settings_show_song_position">Position „Lied x/n“ anzeigen</string>
+    <string name="settings_show_page_number">Seite „Seite x/n“ anzeigen</string>
+    <string name="settings_show_page_buttons">Blätter-Knöpfe ◀ ▶</string>
+    <string name="settings_announce_song_change">Liedwechsel auf letzter Seite ankündigen (⏭)</string>
+    <string name="settings_section_page_turning">Umblättern</string>
+    <string name="settings_tap_zones">Tippzonen unten</string>
+    <string name="settings_tap_zone_size">Größe der Tippzonen</string>
+    <string name="settings_tap_zone_lower_third">Unteres Drittel</string>
+    <string name="settings_tap_zone_lower_half">Untere Hälfte</string>
+    <string name="settings_tap_zone_full_height">Ganze Höhe</string>
+    <string name="settings_swap_tap_zones">Tippzonen tauschen (rechts = zurück)</string>
+    <string name="settings_page_turn_flash">Grüner Rand beim Umblättern</string>
+    <string name="settings_song_change_banner">Titel beim Liedwechsel einblenden</string>
+    <string name="settings_section_pedal">Pedal &amp; Tasten</string>
+    <string name="settings_volume_keys">Lautstärketasten blättern um</string>
+    <string name="settings_reverse_direction">Richtung umkehren</string>
+    <string name="settings_section_display">Anzeige</string>
+    <string name="settings_keep_screen_on">Bildschirm bleibt an</string>
+    <string name="settings_remember_zoom">Zoom pro Seite merken</string>
+    <string name="settings_theme">Design</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Hell</string>
+    <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_version">Version %1$s (%2$d)</string>
 
     <!-- Voreinstellungen -->
     <string name="default_song_title">Neues Lied</string>

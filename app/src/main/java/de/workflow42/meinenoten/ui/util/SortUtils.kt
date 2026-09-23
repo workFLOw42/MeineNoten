@@ -136,8 +136,11 @@ fun Song.groupHeading(mode: SongSortMode): SongHeading = when (mode) {
  * Accents are folded onto their base letter so "Über" files under U, next to where the
  * collator sorts it. Without that the list would grow single-entry sections for Ä, Ö and
  * Ü that sit nowhere near their letter in the order.
+ *
+ * Internal rather than private so the setlist list files its titles by exactly the same
+ * rule – two lists side by side must not disagree about where "Über" belongs.
  */
-private fun String.initialLetter(): String {
+internal fun String.initialLetter(): String {
     val first = trimStart().firstOrNull() ?: return "?"
     if (first.isDigit()) return "#"
     if (!first.isLetter()) return "?"
