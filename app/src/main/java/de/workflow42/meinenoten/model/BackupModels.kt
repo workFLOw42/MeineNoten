@@ -1,5 +1,6 @@
 package de.workflow42.meinenoten.model
 
+import android.graphics.Bitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -49,6 +50,14 @@ data class SerializableAppSettings(
     val noteAuthorNumber: Boolean = false,
     val showBackupReminder: Boolean = true,
     val showCopyrightWarning: Boolean = true,
+)
+
+/** Everything the comparison screen shows about one side of a song, loaded on demand. */
+class ScorePreview(
+    /** First page, null for MusicXML or when the PDF cannot be rendered. */
+    val bitmap: Bitmap?,
+    val pageCount: Int?,
+    val fileSize: Long,
 )
 
 /** Decision for an individual song from a backup archive during import. */
@@ -104,4 +113,13 @@ class BackupAnalysisResult(
     val missingFiles: List<String> = emptyList(),
 ) {
     var importSettings by mutableStateOf(importSettings)
+
+    /**
+     * „Bist du diese Person?“ answered with yes: this device takes over the author's id
+     * and name from the manifest, so the notes in the backup stay one's own.
+     */
+    var adoptAuthorIdentity by mutableStateOf(false)
+
+    /** The question is asked once per backup, not again after every recomposition. */
+    var identityQuestionAnswered by mutableStateOf(false)
 }

@@ -3,12 +3,14 @@ package de.workflow42.meinenoten.ui.screens
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,15 +31,23 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -86,23 +96,79 @@ fun SettingsScreen(
                 .padding(bottom = 24.dp),
         ) {
             SectionHeader(R.string.settings_section_person)
-            // Local state: the value round-trips through DataStore, and feeding that back
-            // into the field while typing would make the cursor jump.
-            var userName by rememberSaveable { mutableStateOf(settings.userName) }
-            OutlinedTextField(
-                value = userName,
-                onValueChange = {
-                    userName = it
-                    onSettingsChange(settings.copy(userName = it))
-                },
-                label = { Text(stringResource(R.string.settings_user_name)) },
-                supportingText = { Text(stringResource(R.string.settings_user_name_hint)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            // A stored name is shown as plain, prominent text; the input line only appears
+            // while the name is empty or being edited. Outside editing everything reads the
+            // stored value directly, so a name set from elsewhere – above all by adopting the
+            // identity from a backup, started from this very screen – appears at once.
+            var editingName by rememberSaveable { mutableStateOf(false) }
+            var nameDraft by rememberSaveable { mutableStateOf(settings.userName) }
+            val nameFocus = remember { FocusRequester() }
+            val keyboard = LocalSoftwareKeyboardController.current
+            val saveName: () -> Unit = {
+                val trimmed = nameDraft.trim()
+                if (trimmed != settings.userName) onSettingsChange(settings.copy(userName = trimmed))
+                editingName = false
+                keyboard?.hide()
+            }
+            // Focus only after „Bearbeiten“: an empty field must not pop up the keyboard
+            // every time the settings are opened.
+            LaunchedEffect(editingName) {
+                if (editingName) nameFocus.requestFocus()
+            }
+            val showNameField = editingName || settings.userName.isBlank()
+            if (showNameField) {
+                OutlinedTextField(
+                    value = if (editingName) nameDraft else settings.userName,
+                    onValueChange = {
+                        // Typing into the empty field counts as editing from here on.
+                        nameDraft = it
+                        editingName = true
+                    },
+                    label = { Text(stringResource(R.string.settings_user_name)) },
+                    supportingText = { Text(stringResource(R.string.settings_user_name_hint)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Words,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { saveName() }),
+                    trailingIcon = {
+                        TextButton(onClick = saveName) {
+                            Text(stringResource(R.string.action_save))
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .focusRequester(nameFocus),
+                )
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_user_name),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = settings.displayName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    TextButton(onClick = {
+                        nameDraft = settings.userName
+                        editingName = true
+                    }) {
+                        Text(stringResource(R.string.action_edit))
+                    }
+                }
+            }
 
             SectionHeader(R.string.settings_section_status_bar)
             SwitchRow(R.string.settings_show_song_title, settings.showSongTitle) {

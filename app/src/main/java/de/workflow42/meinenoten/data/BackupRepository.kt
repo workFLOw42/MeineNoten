@@ -1,7 +1,11 @@
 package de.workflow42.meinenoten.data
 
 import android.content.Context
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
 import android.os.Build
+import android.os.ParcelFileDescriptor
+import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
 import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.model.*
@@ -349,11 +353,70 @@ class BackupRepository(private val context: Context, private val songRepository:
         onSaveSongs(updatedSongs)
         onSaveSetlists(updatedSetlists)
 
+        var newSettings = currentSettings
         if (analysis.importSettings && analysis.settingsInBackup != null) {
-            onSaveSettings(analysis.settingsInBackup.toAppSettings(currentSettings))
+            newSettings = analysis.settingsInBackup.toAppSettings(currentSettings)
+        }
+        if (analysis.adoptAuthorIdentity && analysis.manifest.authorId.isNotBlank()) {
+            // Notes written on this device so far move to the adopted id, so they stay
+            // one's own; the name follows the id, as it belongs to the same person.
+            val reassigned = BackupLogic.reassignNoteAuthor(
+                songs = updatedSongs,
+                oldUserId = currentSettings.userId,
+                newUserId = analysis.manifest.authorId,
+            )
+            if (reassigned != updatedSongs) onSaveSongs(reassigned)
+            newSettings = newSettings.copy(
+                userId = analysis.manifest.authorId,
+                userName = analysis.manifest.authorName.ifBlank { newSettings.userName },
+            )
+        }
+        if (newSettings != currentSettings) {
+            onSaveSettings(newSettings)
         }
 
         analysis.tempDir.deleteRecursively()
+    }
+
+    /**
+     * First page, page count and file size of [song]'s score, for the side-by-side view
+     * in the comparison screen. With [tempDir] the copy inside the backup is read,
+     * otherwise the one on the device. Null for text songs and missing files; MusicXML
+     * gets size only, as it has no pages to render.
+     *
+     * Blocking I/O: call off the main thread.
+     */
+    fun loadScorePreview(song: Song, tempDir: File?, targetWidth: Int): ScorePreview? {
+        val file = scoreFileOf(song, tempDir) ?: return null
+        val size = file.length()
+        if (song.sourceType != SongSource.PDF) return ScorePreview(bitmap = null, pageCount = null, fileSize = size)
+
+        return runCatching {
+            ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+                PdfRenderer(pfd).use { renderer ->
+                    val bitmap = if (renderer.pageCount > 0) {
+                        renderer.openPage(0).use { page ->
+                            val scale = targetWidth.toFloat() / page.width
+                            val height = (page.height * scale).toInt().coerceAtLeast(1)
+                            createBitmap(targetWidth, height).also { bmp ->
+                                bmp.eraseColor(Color.WHITE)
+                                page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                            }
+                        }
+                    } else null
+                    ScorePreview(bitmap = bitmap, pageCount = renderer.pageCount, fileSize = size)
+                }
+            }
+        }.getOrElse { ScorePreview(bitmap = null, pageCount = null, fileSize = size) }
+    }
+
+    private fun scoreFileOf(song: Song, tempDir: File?): File? {
+        if (!song.hasFile) return null
+        return if (tempDir != null) {
+            File(tempDir, song.fileUri).takeIf { it.isFile }
+        } else {
+            songRepository.fileOf(song)
+        }
     }
 
     private fun copyBackupScoreToStorage(tempDir: File, backupSong: Song, overrideId: String? = null): String {

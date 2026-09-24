@@ -40,6 +40,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import de.workflow42.meinenoten.R
@@ -133,6 +134,8 @@ fun MainApp(
     onSettingsChange: (AppSettings) -> Unit = {},
 ) {
     val context = LocalContext.current
+    // For texts: follows configuration changes, unlike context.getString.
+    val resources = LocalResources.current
     val repository = remember { SongRepository(context) }
     
     val navigationState = rememberNavigationState(
@@ -272,13 +275,13 @@ fun MainApp(
     ) { uri ->
         if (uri != null) {
             isBackingUp = true
-            val startMsg = context.getString(R.string.backup_progress_start)
+            val startMsg = resources.getString(R.string.backup_progress_start)
             backupProgressMessage = startMsg
             drawerScope.launch(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(uri)?.use { out ->
                         backupRepository.createFullBackupZip(out, songs.toList(), setlists.toList(), settings) { current, total, title ->
-                            val msg = context.getString(R.string.backup_progress_message, current, total, title)
+                            val msg = resources.getString(R.string.backup_progress_message, current, total, title)
                             drawerScope.launch(Dispatchers.Main) {
                                 backupProgressMessage = msg
                             }
@@ -304,13 +307,13 @@ fun MainApp(
         pendingSetlistToShare = null
         if (uri != null && setlistToShare != null) {
             isBackingUp = true
-            val startMsg = context.getString(R.string.backup_progress_start)
+            val startMsg = resources.getString(R.string.backup_progress_start)
             backupProgressMessage = startMsg
             drawerScope.launch(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(uri)?.use { out ->
                         backupRepository.createSetlistBackupZip(out, setlistToShare, songs.toList(), settings) { current, total, title ->
-                            val msg = context.getString(R.string.backup_progress_message, current, total, title)
+                            val msg = resources.getString(R.string.backup_progress_message, current, total, title)
                             drawerScope.launch(Dispatchers.Main) {
                                 backupProgressMessage = msg
                             }
@@ -1142,9 +1145,17 @@ fun MainApp(
     if (analysisToCompare != null) {
         BackupCompareScreen(
             analysisResult = analysisToCompare,
+            currentUserId = settings.userId,
+            loadPreview = { song, fromBackup ->
+                backupRepository.loadScorePreview(
+                    song = song,
+                    tempDir = if (fromBackup) analysisToCompare.tempDir else null,
+                    targetWidth = 400,
+                )
+            },
             onApplyImport = { replaceAll ->
                 isBackingUp = true
-                val startMsg = context.getString(R.string.backup_progress_start)
+                val startMsg = resources.getString(R.string.backup_progress_start)
                 backupProgressMessage = startMsg
                 drawerScope.launch(Dispatchers.IO) {
                     runCatching {
@@ -1168,7 +1179,7 @@ fun MainApp(
                             },
                             replaceAll = replaceAll,
                             onProgress = { current, total, title ->
-                                val msg = context.getString(R.string.backup_progress_message, current, total, title)
+                                val msg = resources.getString(R.string.backup_progress_message, current, total, title)
                                 drawerScope.launch(Dispatchers.Main) {
                                     backupProgressMessage = msg
                                 }

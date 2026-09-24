@@ -251,6 +251,22 @@
     <string name="compare_import_now">Import now</string>
     <string name="compare_replace_all_warning">Do you really want to replace your entire current collection with this backup? All local songs and setlists will be deleted first.</string>
     <string name="compare_replace_all_confirm">Yes, replace everything</string>
+    <string name="compare_identity_title">Is this you?</string>
+    <string name="compare_identity_msg">This complete backup was made by \"%1$s\" (%2$s). If it is your own, this device takes over its id and name – your notes then stay your own and are not shown as someone else\'s.</string>
+    <string name="compare_identity_yes">Yes, that\'s me</string>
+    <string name="compare_identity_no">No</string>
+    <string name="compare_identity_switch">I am %1$s (take over id)</string>
+    <string name="compare_identity_unknown_name">no name</string>
+    <string name="compare_needed_by_setlist">Setlist \"%1$s\" contains this song</string>
+    <string name="compare_needed_by_setlists">Setlists %1$s contain this song</string>
+    <plurals name="compare_setlist_incomplete">
+        <item quantity="one">%1$d song is deselected – the setlist will be incomplete</item>
+        <item quantity="other">%1$d songs are deselected – the setlist will be incomplete</item>
+    </plurals>
+    <string name="compare_preview_mine">Mine</string>
+    <string name="compare_preview_backup">Backup</string>
+    <string name="compare_preview_pages">%1$d p. · %2$s</string>
+    <string name="compare_preview_none">No preview</string>
     <string name="error_backup_read_failed">Backup could not be read</string>
     <string name="error_missing_song_file">Score file missing for \"%1$s\".</string>
     <string name="backup_in_progress_title">Creating backup...</string>

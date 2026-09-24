@@ -83,9 +83,9 @@ entfernen – Entscheidung steht aus.
 **Eigene Kompositionen** (Abschnitt 5a) sind noch nicht ausgearbeitet.
 
 **Datensicherung und Austausch** (Abschnitt 5b): Stufe 1 ist umgesetzt (ZIP-Sicherung,
-Setlist teilen, Vergleichsmaske, Notizen pro Person). Noch offen ist die Vorschau der
-ersten Seite beider Fassungen in der Vergleichsmaske. Der automatische Abgleich mit
-Google Drive (Stufe 2) ist nur ein Entwurf.
+Setlist teilen, Vergleichsmaske mit Vorschaubild, Personenfrage und Setlist-Hinweis,
+Notizen pro Person). Offen ist nur noch die Prüfung der letzten drei Ergänzungen auf
+dem Gerät. Der automatische Abgleich mit Google Drive (Stufe 2) ist nur ein Entwurf.
 
 ---
 
@@ -1074,11 +1074,20 @@ Fortschritt – sonst würde jedes Öffnen eines Liedes eine neue Version erzeug
     *   `[x]` Unit-Tests: Dateiname, Hin-/Rückweg der Einstellungen
         (`BackupRepositoryTest`), Gruppeneinteilung und Setlist-Verweise
         (`BackupLogicTest`) – 60 Tests grün
-    *   `[ ]` Vorschaubild der ersten Seite beider Fassungen in der Vergleichsmaske
-    *   `[ ]` Frage „Bist du diese Person?“ beim Einlesen einer eigenen
-        Komplettsicherung auf einem neuen Gerät (Kennung übernehmen)
-    *   `[ ]` Hinweis, wenn ein abgewähltes Lied von einer ausgewählten Setlist
-        gebraucht wird
+    *   `[x]` Vorschaubild der ersten Seite beider Fassungen in der Vergleichsmaske, dazu
+        Seitenzahl und Dateigröße (`BackupRepository.loadScorePreview`, `ScorePreviewBox`;
+        wird beim Scrollen nachgeladen und beim Verlassen der Maske verworfen)
+    *   `[x]` Frage „Bist du diese Person?“ beim Einlesen einer Komplettsicherung mit
+        fremder Kennung (`BackupLogic.shouldAskForIdentity`); bei *Ja* übernimmt das Gerät
+        Kennung und Name, bisherige eigene Notizen wandern mit
+        (`BackupLogic.reassignNoteAuthor`). Die Antwort lässt sich bis zum Import über
+        einen Schalter in der Liste ändern.
+    *   `[x]` Hinweis, wenn ein abgewähltes Lied von einer ausgewählten Setlist
+        gebraucht wird: am Lied („Setlist *Erntedank* enthält dieses Lied“) und an der
+        Setlist („1 Lied ist abgewählt“) (`BackupLogic.songsMissingFromSelectedSetlists`)
+    *   `[x]` Unit-Tests für Hinweis, Personenfrage und Umschreiben der Notizen –
+        64 Tests grün
+    *   `[ ]` Auf dem Gerät prüfen: Vorschau, Personenfrage, Setlist-Hinweis
 5.  Stufe 2 erst, wenn Stufe 1 im Alltag erprobt ist – sie nutzt dasselbe Format und
     dieselbe Zuordnung, nur mit anderem Transport.
 
@@ -1258,9 +1267,10 @@ Stand 1.6.1 (`versionCode` 13):
 
 | Was | Wie geprüft | Ergebnis |
 |---|---|---|
-| Unit-Tests | `:app:testDebugUnitTest` | 60 bestanden, 0 fehlgeschlagen |
+| Unit-Tests | `:app:testDebugUnitTest` | 64 bestanden, 0 fehlgeschlagen |
 | Release-Bundle | `:app:bundleRelease` | erfolgreich |
 | Versionszähler | `version.properties` | nach dem Build auf 14 / 1.6.2 erhöht |
+| Sicherung (Release-Build) | Alles sichern, App-Daten löschen, Sicherung einlesen | erfolgreich: alle Lieder, Noten, Setlists zurück |
 
 Die Unit-Tests decken reine Logik ab: Gruppierung und Sortierung der Songliste
 (`SongListGroupingTest`), Suche, Zeitraum und Sortierung der Setlists

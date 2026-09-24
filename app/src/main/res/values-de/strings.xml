@@ -245,6 +245,22 @@
     <string name="compare_import_now">Jetzt importieren</string>
     <string name="compare_replace_all_warning">Möchtest du wirklich deinen gesamten aktuellen Bestand durch diese Sicherung ersetzen? Alle lokalen Lieder und Setlisten werden vorher gelöscht.</string>
     <string name="compare_replace_all_confirm">Ja, alles ersetzen</string>
+    <string name="compare_identity_title">Bist du diese Person?</string>
+    <string name="compare_identity_msg">Diese Komplettsicherung stammt von „%1$s“ (%2$s). Ist es deine eigene, übernimmt dieses Gerät Kennung und Name – deine Notizen bleiben dann deine eigenen und werden nicht als fremde angezeigt.</string>
+    <string name="compare_identity_yes">Ja, das bin ich</string>
+    <string name="compare_identity_no">Nein</string>
+    <string name="compare_identity_switch">Ich bin %1$s (Kennung übernehmen)</string>
+    <string name="compare_identity_unknown_name">ohne Namen</string>
+    <string name="compare_needed_by_setlist">Setlist „%1$s“ enthält dieses Lied</string>
+    <string name="compare_needed_by_setlists">Setlisten %1$s enthalten dieses Lied</string>
+    <plurals name="compare_setlist_incomplete">
+        <item quantity="one">%1$d Lied ist abgewählt – die Setlist wird unvollständig</item>
+        <item quantity="other">%1$d Lieder sind abgewählt – die Setlist wird unvollständig</item>
+    </plurals>
+    <string name="compare_preview_mine">Meins</string>
+    <string name="compare_preview_backup">Sicherung</string>
+    <string name="compare_preview_pages">%1$d S. · %2$s</string>
+    <string name="compare_preview_none">Keine Vorschau</string>
     <string name="error_backup_read_failed">Sicherung konnte nicht gelesen werden</string>
     <string name="error_missing_song_file">Für „%1$s“ fehlt die Notendatei.</string>
     <string name="backup_in_progress_title">Sicherung wird erstellt…</string>

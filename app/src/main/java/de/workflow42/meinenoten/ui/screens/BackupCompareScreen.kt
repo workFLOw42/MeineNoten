@@ -1,6 +1,17 @@
 package de.workflow42.meinenoten.ui.screens
 
+import android.text.format.Formatter
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,24 +27,46 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.workflow42.meinenoten.R
+import de.workflow42.meinenoten.data.BackupLogic
 import de.workflow42.meinenoten.model.*
 import de.workflow42.meinenoten.ui.util.formatSetlistDate
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackupCompareScreen(
     analysisResult: BackupAnalysisResult,
+    currentUserId: String,
     onApplyImport: (replaceAll: Boolean) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Blocking; called off the main thread. `fromBackup` picks the copy in the backup. */
+    loadPreview: (song: Song, fromBackup: Boolean) -> ScorePreview? = { _, _ -> null },
 ) {
     var replaceAll by remember { mutableStateOf(false) }
     var showReplaceAllConfirmDialog by remember { mutableStateOf(false) }
 
+    // Previews only live as long as the screen: they are of no use afterwards.
+    DisposableEffect(analysisResult) {
+        onDispose { previewCache.clear() }
+    }
+
     val manifest = analysisResult.manifest
+    val askForIdentity = remember(analysisResult, currentUserId) {
+        BackupLogic.shouldAskForIdentity(manifest, currentUserId)
+    }
+    val authorLabel = manifest.authorName.ifBlank { stringResource(R.string.compare_identity_unknown_name) }
+
+    // Reads the snapshot state of every choice, so it follows each tap on a chip or switch.
+    val missingBySong = BackupLogic.songsMissingFromSelectedSetlists(
+        analysisResult.songs,
+        analysisResult.setlists,
+    )
+
     val differentMetaSongs = remember(analysisResult) {
         analysisResult.songs.filter { it.category == SongMatchCategory.SAME_FILE_DIFFERENT_METADATA }
     }
@@ -45,6 +78,34 @@ fun BackupCompareScreen(
     }
     val identicalSongs = remember(analysisResult) {
         analysisResult.songs.filter { it.category == SongMatchCategory.IDENTICAL }
+    }
+
+    if (askForIdentity && !analysisResult.identityQuestionAnswered) {
+        AlertDialog(
+            onDismissRequest = { analysisResult.identityQuestionAnswered = true },
+            title = { Text(stringResource(R.string.compare_identity_title)) },
+            text = {
+                val dateStr = SimpleDateFormat("dd.MM.yyyy", Locale.GERMAN).format(Date(manifest.createdAt))
+                val origin = listOf(manifest.deviceName, dateStr).filter { it.isNotBlank() }.joinToString(" · ")
+                Text(stringResource(R.string.compare_identity_msg, authorLabel, origin))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    analysisResult.adoptAuthorIdentity = true
+                    analysisResult.identityQuestionAnswered = true
+                }) {
+                    Text(stringResource(R.string.compare_identity_yes))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    analysisResult.adoptAuthorIdentity = false
+                    analysisResult.identityQuestionAnswered = true
+                }) {
+                    Text(stringResource(R.string.compare_identity_no))
+                }
+            },
+        )
     }
 
     if (showReplaceAllConfirmDialog) {
@@ -169,6 +230,8 @@ fun BackupCompareScreen(
                 items(differentMetaSongs) { item ->
                     SongDiffCard(
                         item = item,
+                        tempDir = analysisResult.tempDir,
+                        loadPreview = loadPreview,
                         onActionChanged = { newAction ->
                             item.action = newAction
                         },
@@ -186,6 +249,8 @@ fun BackupCompareScreen(
                 items(possibleOtherSongs) { item ->
                     SongDiffCard(
                         item = item,
+                        tempDir = analysisResult.tempDir,
+                        loadPreview = loadPreview,
                         onActionChanged = { newAction ->
                             item.action = newAction
                         },
@@ -203,6 +268,7 @@ fun BackupCompareScreen(
                 items(newSongs) { item ->
                     NewSongCard(
                         item = item,
+                        neededBySetlists = missingBySong[item.backupSong.id].orEmpty(),
                         onActionChanged = { newAction ->
                             item.action = newAction
                         }
@@ -229,11 +295,25 @@ fun BackupCompareScreen(
                     CategoryHeader(stringResource(R.string.compare_cat_setlists, analysisResult.setlists.size))
                 }
                 items(analysisResult.setlists) { setlistItem ->
+                    val missingCount = if (setlistItem.importSetlist) {
+                        setlistItem.backupSetlist.songIds.distinct().count { it in missingBySong }
+                    } else 0
                     SetlistImportCard(
                         item = setlistItem,
+                        missingSongCount = missingCount,
                         onToggleImport = {
                             setlistItem.importSetlist = !setlistItem.importSetlist
                         }
+                    )
+                }
+            }
+
+            if (askForIdentity) {
+                item {
+                    IdentityCard(
+                        authorLabel = authorLabel,
+                        adopt = analysisResult.adoptAuthorIdentity,
+                        onToggle = { analysisResult.adoptAuthorIdentity = !analysisResult.adoptAuthorIdentity },
                     )
                 }
             }
@@ -366,6 +446,8 @@ private fun CategoryHeader(title: String) {
 @Composable
 private fun SongDiffCard(
     item: SongComparisonItem,
+    tempDir: File,
+    loadPreview: (song: Song, fromBackup: Boolean) -> ScorePreview?,
     onActionChanged: (SongImportAction) -> Unit,
     onMergeNotesChanged: (Boolean) -> Unit,
 ) {
@@ -389,6 +471,26 @@ private fun SongDiffCard(
                 if (local.artist != backup.artist) DiffRow("Künstler", local.artist, backup.artist)
                 if (local.genre != backup.genre) DiffRow("Genre", local.genre, backup.genre)
                 if (local.version != backup.version) DiffRow("Version", local.version, backup.version)
+
+                if (local.hasFile || backup.hasFile) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ScorePreviewBox(
+                            label = stringResource(R.string.compare_preview_mine),
+                            song = local,
+                            cacheKey = "local|${local.id}",
+                            load = { loadPreview(local, false) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        ScorePreviewBox(
+                            label = stringResource(R.string.compare_preview_backup),
+                            song = backup,
+                            cacheKey = "${tempDir.path}|${backup.id}",
+                            load = { loadPreview(backup, true) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -436,12 +538,14 @@ private fun SongDiffCard(
 @Composable
 private fun NewSongCard(
     item: SongComparisonItem,
+    neededBySetlists: List<String>,
     onActionChanged: (SongImportAction) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
+      Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -476,6 +580,37 @@ private fun NewSongCard(
                 )
             }
         }
+        if (neededBySetlists.isNotEmpty()) {
+            NeededBySetlistHint(
+                setlistTitles = neededBySetlists,
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+            )
+        }
+      }
+    }
+}
+
+/** „Setlist *Erntedank* enthält dieses Lied“ – shown under a deselected song. */
+@Composable
+private fun NeededBySetlistHint(setlistTitles: List<String>, modifier: Modifier = Modifier) {
+    val text = if (setlistTitles.size == 1) {
+        stringResource(R.string.compare_needed_by_setlist, setlistTitles.first())
+    } else {
+        stringResource(R.string.compare_needed_by_setlists, setlistTitles.joinToString(", ") { "„$it“" })
+    }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            Icons.Default.Warning,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }
 
@@ -513,6 +648,7 @@ private fun IdenticalSongCard(
 @Composable
 private fun SetlistImportCard(
     item: SetlistImportItem,
+    missingSongCount: Int,
     onToggleImport: () -> Unit,
 ) {
     Card(
@@ -539,10 +675,120 @@ private fun SetlistImportCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                if (missingSongCount > 0) {
+                    Text(
+                        text = pluralStringResource(R.plurals.compare_setlist_incomplete, missingSongCount, missingSongCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
             Switch(
                 checked = item.importSetlist,
                 onCheckedChange = { onToggleImport() }
+            )
+        }
+    }
+}
+
+/**
+ * Switch for „Ich bin ‹Name›“: the answer to the question asked on opening, changeable
+ * until the import is started.
+ */
+@Composable
+private fun IdentityCard(
+    authorLabel: String,
+    adopt: Boolean,
+    onToggle: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.compare_identity_switch, authorLabel),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = adopt, onCheckedChange = { onToggle() })
+        }
+    }
+}
+
+/** Previews already rendered, so scrolling back does not open the PDF again. */
+private val previewCache = ConcurrentHashMap<String, ScorePreview>()
+
+/**
+ * First page of one side, with page count and file size underneath. Two of these side by
+ * side answer „are these the same notes?“ at a glance, which the title cannot.
+ */
+@Composable
+private fun ScorePreviewBox(
+    label: String,
+    song: Song,
+    cacheKey: String,
+    load: () -> ScorePreview?,
+    modifier: Modifier = Modifier,
+) {
+    var preview by remember(cacheKey) { mutableStateOf(previewCache[cacheKey]) }
+    var loading by remember(cacheKey) { mutableStateOf(preview == null && song.hasFile) }
+
+    LaunchedEffect(cacheKey) {
+        if (preview != null || !song.hasFile) return@LaunchedEffect
+        val loaded = withContext(Dispatchers.IO) { runCatching(load).getOrNull() }
+        if (loaded != null) previewCache[cacheKey] = loaded
+        preview = loaded
+        loading = false
+    }
+
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.707f)
+                .background(Color.White, RoundedCornerShape(4.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(4.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val bitmap = preview?.bitmap
+            when {
+                bitmap != null -> Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = label,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                else -> Text(
+                    text = stringResource(R.string.compare_preview_none),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.DarkGray,
+                )
+            }
+        }
+        val info = preview
+        if (info != null) {
+            val sizeStr = Formatter.formatShortFileSize(LocalContext.current, info.fileSize)
+            Text(
+                text = if (info.pageCount != null) {
+                    stringResource(R.string.compare_preview_pages, info.pageCount, sizeStr)
+                } else sizeStr,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
     }

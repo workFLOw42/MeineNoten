@@ -19,3 +19,6 @@ local.properties
 *.jks
 *.keystore
 keystore.properties
+
+# Notizen des KI-Assistenten in Android Studio
+.artifacts/
