@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import de.workflow42.meinenoten.ui.components.DontShowAgainCheckbox
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,7 +73,16 @@ fun SongListScreen(
     modifier: Modifier = Modifier,
     /** Offered as a filter, so a service can be prepared without leaving this screen. */
     setlists: List<Setlist> = emptyList(),
+    lastBackupAt: Long = 0L,
+    showBackupReminder: Boolean = true,
+    onNavigateToSettings: () -> Unit = {},
+    onDisableBackupReminder: () -> Unit = {},
 ) {
+    var reminderDismissed by rememberSaveable { mutableStateOf(false) }
+    val showBackupReminderActive = showBackupReminder &&
+            !reminderDismissed &&
+            songs.isNotEmpty() &&
+            (lastBackupAt <= 0L || (System.currentTimeMillis() - lastBackupAt) > 30L * 24 * 60 * 60 * 1000L)
     // Filter and sort state is view state, not data: it survives rotation but is
     // deliberately not persisted, so the app always opens on the full library.
     var selectedGenre by rememberSaveable { mutableStateOf<String?>(null) }
@@ -194,6 +205,59 @@ fun SongListScreen(
         modifier = modifier
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            if (showBackupReminderActive) {
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = stringResource(R.string.backup_reminder_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Text(
+                            text = stringResource(R.string.backup_reminder_msg),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        // A checkbox, not a third button: it qualifies whichever of the two
+                        // choices follows instead of being a choice of its own.
+                        var dontShowAgain by rememberSaveable { mutableStateOf(false) }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp)
+                        ) {
+                            CompositionLocalProvider(
+                                LocalContentColor provides MaterialTheme.colorScheme.onTertiaryContainer,
+                            ) {
+                                DontShowAgainCheckbox(
+                                    checked = dontShowAgain,
+                                    onCheckedChange = { dontShowAgain = it },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            TextButton(onClick = {
+                                if (dontShowAgain) onDisableBackupReminder()
+                                reminderDismissed = true
+                            }) {
+                                Text(stringResource(R.string.backup_reminder_dismiss))
+                            }
+                            TextButton(onClick = {
+                                if (dontShowAgain) onDisableBackupReminder()
+                                reminderDismissed = true
+                                onNavigateToSettings()
+                            }) {
+                                Text(stringResource(R.string.backup_reminder_action))
+                            }
+                        }
+                    }
+                }
+            }
+
             SongFilterBar(
                 genres = genres,
                 setlists = setlists,

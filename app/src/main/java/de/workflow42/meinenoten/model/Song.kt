@@ -1,5 +1,6 @@
 package de.workflow42.meinenoten.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -36,12 +37,21 @@ data class Song(
     /** Zoom and pan settings per page index. */
     val pageViews: Map<Int, PageView> = emptyMap(),
     /**
-     * Short memo shown as an overlay next to a score, e.g. "Capo 2", "DADGAD".
+     * The single memo of earlier versions, before notes had an author.
      *
-     * Kept separate from [lyrics]: this is glanced at while playing, so it has to stay
-     * short enough for the small overlay box.
+     * Still read, so older files and backups stay importable, and turned into the own
+     * entry of [notes] by [migrateLegacyNote]. Emptied afterwards and never written again.
      */
-    val notes: String = "",
+    @SerialName("notes")
+    val legacyNotes: String = "",
+    /**
+     * Memos next to the score ("Capo 2", "DADGAD"), at most one per person.
+     *
+     * Kept separate from [lyrics]: these are glanced at while playing, so they have to
+     * stay short enough for the small overlay box.
+     */
+    @SerialName("songNotes")
+    val notes: List<SongNote> = emptyList(),
     /**
      * Full song text – verses, chords, a lead sheet typed by hand.
      *
@@ -61,7 +71,30 @@ data class Song(
      * look at this" is a property of the song itself, not of one programme it sits in.
      */
     val lastOpenedAt: Long = 0,
+    /**
+     * SHA-256 of the score file as lowercase hex; empty = not computed yet.
+     *
+     * Recognises the same score in a backup even when it was filed under a different
+     * title or id. Proves equality only – a re-saved scan has different bytes.
+     */
+    val fileHash: String = "",
 ) {
+    /**
+     * Turns a memo from before authorship into the own note of [userId].
+     *
+     * Idempotent: once [legacyNotes] is empty nothing changes. An existing own note is
+     * never overwritten.
+     */
+    fun migrateLegacyNote(userId: String, userName: String): Song {
+        if (legacyNotes.isBlank() || userId.isBlank()) return this
+        val merged = if (notes.ownNote(userId) != null) {
+            notes
+        } else {
+            notes + SongNote(authorId = userId, authorName = userName, text = legacyNotes)
+        }
+        return copy(legacyNotes = "", notes = merged)
+    }
+
     val displayTitle: String
         get() = if (version.isNotBlank()) "$title - $version" else title
 

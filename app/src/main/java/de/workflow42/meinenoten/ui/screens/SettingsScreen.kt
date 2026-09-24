@@ -3,18 +3,26 @@ package de.workflow42.meinenoten.ui.screens
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -23,8 +31,14 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import de.workflow42.meinenoten.R
@@ -47,6 +61,8 @@ fun SettingsScreen(
     settings: AppSettings,
     onSettingsChange: (AppSettings) -> Unit,
     onMenuClick: () -> Unit,
+    onExportBackup: () -> Unit = {},
+    onRestoreBackup: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -69,6 +85,25 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 24.dp),
         ) {
+            SectionHeader(R.string.settings_section_person)
+            // Local state: the value round-trips through DataStore, and feeding that back
+            // into the field while typing would make the cursor jump.
+            var userName by rememberSaveable { mutableStateOf(settings.userName) }
+            OutlinedTextField(
+                value = userName,
+                onValueChange = {
+                    userName = it
+                    onSettingsChange(settings.copy(userName = it))
+                },
+                label = { Text(stringResource(R.string.settings_user_name)) },
+                supportingText = { Text(stringResource(R.string.settings_user_name_hint)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+
             SectionHeader(R.string.settings_section_status_bar)
             SwitchRow(R.string.settings_show_song_title, settings.showSongTitle) {
                 onSettingsChange(settings.copy(showSongTitle = it))
@@ -142,6 +177,92 @@ fun SettingsScreen(
                 selected = settings.themeMode,
                 onSelect = { onSettingsChange(settings.copy(themeMode = it)) },
             )
+
+            SectionHeader(R.string.settings_section_backup)
+
+            val lastBackupLabel = if (settings.lastBackupAt <= 0L) {
+                stringResource(R.string.settings_last_backup_never)
+            } else {
+                val days = ((System.currentTimeMillis() - settings.lastBackupAt) / (1000 * 60 * 60 * 24)).toInt()
+                when (days) {
+                    0 -> stringResource(R.string.settings_last_backup_today)
+                    1 -> stringResource(R.string.settings_last_backup_yesterday)
+                    else -> stringResource(R.string.settings_last_backup, days)
+                }
+            }
+
+            // 1. Alles sichern
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_backup_full)) },
+                supportingContent = {
+                    Column(modifier = Modifier.padding(top = 4.dp)) {
+                        Text(stringResource(R.string.settings_backup_full_hint) + "\n" + lastBackupLabel)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = onExportBackup) {
+                            Text(stringResource(R.string.settings_backup_full))
+                        }
+                    }
+                },
+            )
+
+            // 2. Sicherung einlesen
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_restore)) },
+                supportingContent = {
+                    Column(modifier = Modifier.padding(top = 4.dp)) {
+                        Text(stringResource(R.string.settings_restore_hint))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(onClick = onRestoreBackup) {
+                            Text(stringResource(R.string.settings_restore))
+                        }
+                    }
+                },
+            )
+
+            // 3. Notizen anderer
+            SectionHeader(R.string.settings_section_other_notes)
+            SwitchRow(R.string.settings_note_author_dot, settings.noteAuthorDot) {
+                onSettingsChange(settings.copy(noteAuthorDot = it))
+            }
+            SwitchRow(R.string.settings_note_author_colored_name, settings.noteAuthorColoredName) {
+                onSettingsChange(settings.copy(noteAuthorColoredName = it))
+            }
+            SwitchRow(R.string.settings_note_author_number, settings.noteAuthorNumber) {
+                onSettingsChange(settings.copy(noteAuthorNumber = it))
+            }
+
+            // Kategorie Hinweise
+            SectionHeader(R.string.settings_section_hinweise)
+
+            // 4. Schalter für 30 Tage Backup
+            SwitchRow(R.string.settings_show_backup_reminder, settings.showBackupReminder) {
+                onSettingsChange(settings.copy(showBackupReminder = it))
+            }
+
+            // 5. Schalter für das Urheberrecht
+            SwitchRow(R.string.settings_show_copyright_warning, settings.showCopyrightWarning) {
+                onSettingsChange(settings.copy(showCopyrightWarning = it))
+            }
+
+            // 6. Text zum Datenschutz "Datenschutz-Hinweis"
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_privacy_notice_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.settings_privacy_notice_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             VersionFooter(
                 modifier = Modifier

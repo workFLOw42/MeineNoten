@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.model.Song
+import de.workflow42.meinenoten.ui.components.appTitle
 
 /**
  * Content of the app's navigation drawer, which replaced the navigation rail.
@@ -49,12 +50,14 @@ fun AppDrawerContent(
     onDeleteSong: () -> Unit,
     runningOrder: List<Song>,
     onSongClick: (Song) -> Unit,
+    /** Entered name; turns the heading into "‹Name›s Noten". */
+    userName: String = "",
 ) {
     ModalDrawerSheet {
         LazyColumn {
             item {
                 Text(
-                    text = stringResource(R.string.app_name),
+                    text = appTitle(userName),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
                 )

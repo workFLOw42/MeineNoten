@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -87,6 +88,7 @@ fun SetlistScreen(
     onDuplicateSetlist: (Setlist) -> Unit,
     /** Asks for confirmation before deleting; the caller owns the actual removal. */
     onDeleteSetlist: (Setlist) -> Unit,
+    onShareSetlist: (Setlist) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // View state, not data: survives rotation, deliberately not persisted.
@@ -247,6 +249,7 @@ fun SetlistScreen(
                                 onEdit = { onEditSetlist(setlist) },
                                 onDuplicate = { onDuplicateSetlist(setlist) },
                                 onDelete = { onDeleteSetlist(setlist) },
+                                onShare = { onShareSetlist(setlist) },
                             )
                         }
                     }
@@ -282,6 +285,7 @@ private fun SetlistRow(
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
+    onShare: () -> Unit,
 ) {
     val parsedDate = remember(setlist.date) { parseSetlistDate(setlist.date) }
     val songCount = setlist.songIds.size
@@ -327,6 +331,7 @@ private fun SetlistRow(
                 SetlistOverflowMenu(
                     onEdit = onEdit,
                     onDuplicate = onDuplicate,
+                    onShare = onShare,
                     onDelete = onDelete,
                 )
             },
@@ -390,6 +395,7 @@ private fun CalendarLeaf(date: LocalDate?) {
 private fun SetlistOverflowMenu(
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(value = false) }
@@ -416,6 +422,14 @@ private fun SetlistOverflowMenu(
                 onClick = {
                     expanded = false
                     onDuplicate()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_share_setlist)) },
+                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onShare()
                 },
             )
             HorizontalDivider()
@@ -456,6 +470,7 @@ fun SetlistDetailScreen(
     onResume: (String, Int) -> Unit = { _, _ -> },
     /** Opens the first song of the programme and clears the stored position. */
     onStartFromBeginning: (Song) -> Unit = {},
+    onShareSetlist: (Setlist) -> Unit = {},
 ) {
     // Paired with their position in songIds rather than mapped through it: a song can
     // appear twice in a programme (reprise, encore), and an id left behind by a deleted
@@ -605,6 +620,12 @@ fun SetlistDetailScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { onShareSetlist(setlist) }) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = stringResource(R.string.action_share_setlist),
+                        )
+                    }
                     IconButton(onClick = { showEditDialog = true }) {
                         Icon(
                             Icons.Default.Edit,

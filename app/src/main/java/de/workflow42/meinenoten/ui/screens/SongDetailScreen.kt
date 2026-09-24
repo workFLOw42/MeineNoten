@@ -49,6 +49,12 @@ import de.workflow42.meinenoten.data.AppSettings
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
 import de.workflow42.meinenoten.ui.components.MusicXmlView
+import de.workflow42.meinenoten.ui.components.NoteAuthorLabel
+import de.workflow42.meinenoten.model.otherNotes
+import de.workflow42.meinenoten.model.ownNote
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import de.workflow42.meinenoten.ui.components.PdfView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -100,6 +106,8 @@ fun SongDetailScreen(
      * be cleared and the programme starts from the top next time.
      */
     onFinished: () -> Unit = {},
+    /** Author numbers across the library, see [authorNumbers]. */
+    authorNumbers: Map<String, Int> = emptyMap(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -112,6 +120,9 @@ fun SongDetailScreen(
     var pageCount by remember(song.id) { mutableIntStateOf(0) }
     val focusRequester = remember { FocusRequester() }
     var notesExpanded by remember(song.id) { mutableStateOf(value = false) }
+    // Other people's notes are hidden by default and switched on per person. Not keyed on
+    // the song: whoever is followed stays visible for the rest of the set.
+    var shownAuthors by rememberSaveable { mutableStateOf(emptySet<String>()) }
 
     val flashAlpha = remember { Animatable(0f) }
 
@@ -295,7 +306,9 @@ fun SongDetailScreen(
                 actions = {
                     // A memo beside the score (capo, tuning). Behind a button rather than
                     // an overlay, so it never covers a stave.
-                    if (song.notes.isNotBlank()) {
+                    val ownNote = song.notes.ownNote(settings.userId)?.takeIf { it.text.isNotBlank() }
+                    val othersNotes = song.notes.otherNotes(settings.userId)
+                    if (ownNote != null || othersNotes.isNotEmpty()) {
                         Box {
                             IconButton(onClick = { notesExpanded = !notesExpanded }) {
                                 Icon(
@@ -307,13 +320,60 @@ fun SongDetailScreen(
                                 expanded = notesExpanded,
                                 onDismissRequest = { notesExpanded = false },
                             ) {
-                                Text(
-                                    text = song.notes,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier
-                                        .widthIn(max = 320.dp)
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                )
+                                if (ownNote != null) {
+                                    Text(
+                                        text = ownNote.text,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier
+                                            .widthIn(max = 320.dp)
+                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    )
+                                }
+                                if (othersNotes.isNotEmpty()) {
+                                    if (ownNote != null) HorizontalDivider()
+                                    othersNotes.forEach { note ->
+                                        val shown = note.authorId in shownAuthors
+                                        val authorName = note.authorName.ifBlank {
+                                            stringResource(R.string.note_author_unknown)
+                                        }
+                                        val showNoteLabel = stringResource(R.string.cd_show_note, authorName)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .widthIn(max = 320.dp)
+                                                .padding(start = 16.dp, end = 4.dp),
+                                        ) {
+                                            NoteAuthorLabel(
+                                                note = note,
+                                                settings = settings,
+                                                number = authorNumbers[note.authorId],
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            Switch(
+                                                checked = shown,
+                                                onCheckedChange = { on ->
+                                                    shownAuthors = if (on) {
+                                                        shownAuthors + note.authorId
+                                                    } else {
+                                                        shownAuthors - note.authorId
+                                                    }
+                                                },
+                                                modifier = Modifier.semantics {
+                                                    contentDescription = showNoteLabel
+                                                },
+                                            )
+                                        }
+                                        if (shown) {
+                                            Text(
+                                                text = note.text,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier
+                                                    .widthIn(max = 320.dp)
+                                                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

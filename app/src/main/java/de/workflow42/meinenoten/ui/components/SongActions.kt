@@ -28,6 +28,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import de.workflow42.meinenoten.R
+import de.workflow42.meinenoten.data.AppSettings
+import de.workflow42.meinenoten.model.otherNotes
+import de.workflow42.meinenoten.model.ownNote
+import de.workflow42.meinenoten.model.withOwnNote
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
@@ -183,6 +187,10 @@ fun EditSongDialog(
     onAttachFile: (() -> Unit)? = null,
     /** Drops the score file, leaving a text-only song. */
     onRemoveFile: (() -> Unit)? = null,
+    /** Own identity and the *Notizen anderer* switches. */
+    settings: AppSettings = AppSettings(),
+    /** Author numbers across the library, see [authorNumbers]. */
+    authorNumbers: Map<String, Int> = emptyMap(),
 ) {
     var editTitle by remember(song.id) { mutableStateOf(song.title) }
     var editArtist by remember(song.id) { mutableStateOf(song.artist) }
@@ -191,7 +199,11 @@ fun EditSongDialog(
     var editBpm by remember(song.id) { mutableStateOf(song.bpm.toString()) }
     var editTimeSignature by remember(song.id) { mutableStateOf(song.timeSignature) }
     var editTotalBars by remember(song.id) { mutableStateOf(song.totalBars.toString()) }
-    var editNotes by remember(song.id) { mutableStateOf(song.notes) }
+    var editNotes by remember(song.id) {
+        mutableStateOf(song.notes.ownNote(settings.userId)?.text.orEmpty())
+    }
+    // Other people's notes can be deleted here, but not edited.
+    var otherNotes by remember(song.id) { mutableStateOf(song.notes.otherNotes(settings.userId)) }
     var editLyrics by remember(song.id) { mutableStateOf(song.lyrics) }
     var editPageViews by remember(song.id) { mutableStateOf(song.pageViews) }
 
@@ -266,10 +278,44 @@ fun EditSongDialog(
                 TextField(
                     value = editNotes,
                     onValueChange = { editNotes = it },
-                    label = { Text(stringResource(R.string.label_notes_hint)) },
+                    label = { Text(stringResource(R.string.label_own_note)) },
                     modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth(),
                     minLines = 2,
                 )
+                if (otherNotes.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.label_other_notes),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                    otherNotes.forEach { note ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(top = 12.dp)) {
+                                NoteAuthorLabel(
+                                    note = note,
+                                    settings = settings,
+                                    number = authorNumbers[note.authorId],
+                                )
+                                Text(text = note.text, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            val authorName = note.authorName.ifBlank {
+                                stringResource(R.string.note_author_unknown)
+                            }
+                            IconButton(onClick = { otherNotes = otherNotes - note }) {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteOutline,
+                                    contentDescription = stringResource(R.string.cd_delete_note, authorName),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
                 TextField(
                     value = editLyrics,
                     onValueChange = { editLyrics = it },
@@ -396,7 +442,15 @@ fun EditSongDialog(
                             bpm = editBpm.toIntOrNull() ?: song.bpm,
                             timeSignature = editTimeSignature,
                             totalBars = editTotalBars.toIntOrNull() ?: song.totalBars,
-                            notes = editNotes,
+                            // The original own note goes in too, so an unchanged text
+                            // keeps its timestamp.
+                            notes = (otherNotes + listOfNotNull(song.notes.ownNote(settings.userId)))
+                                .withOwnNote(
+                                    userId = settings.userId,
+                                    userName = settings.displayName,
+                                    text = editNotes,
+                                    now = System.currentTimeMillis(),
+                                ),
                             lyrics = editLyrics,
                             pageViews = editPageViews,
                         )

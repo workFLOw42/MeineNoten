@@ -6,38 +6,27 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import de.workflow42.meinenoten.model.SerializableAppSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 
-/**
- * How much of the score view, measured from the bottom edge, reacts to page-turn taps.
- *
- * Restricting the zones to the lower part keeps the upper area free for zooming and panning,
- * which is where musicians most often touch the screen by accident.
- */
 enum class TapZoneSize(val heightFraction: Float) {
     LOWER_THIRD(1f / 3f),
     LOWER_HALF(1f / 2f),
     FULL_HEIGHT(1f),
 }
 
-/** Which colour scheme the app uses; [SYSTEM] follows the device setting. */
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-/**
- * All user-adjustable app preferences.
- *
- * The defaults describe the behaviour the app had before settings existed, so an upgrade
- * without any stored values changes nothing for the user.
- */
 data class AppSettings(
     val showSongTitle: Boolean = true,
     val showSongPosition: Boolean = true,
     val showPageNumber: Boolean = true,
     val showPageButtons: Boolean = true,
-    /** On the last page of a song, ▶ shows ⏭ to make clear the next tap changes the song. */
     val announceSongChange: Boolean = true,
     val tapZonesEnabled: Boolean = true,
     val tapZoneSize: TapZoneSize = TapZoneSize.LOWER_THIRD,
@@ -49,34 +38,88 @@ data class AppSettings(
     val keepScreenOn: Boolean = true,
     val rememberZoom: Boolean = true,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-)
+    val userName: String = "",
+    val userId: String = "",
+    val lastBackupAt: Long = 0L,
+    val noteAuthorDot: Boolean = false,
+    val noteAuthorColoredName: Boolean = true,
+    val noteAuthorNumber: Boolean = false,
+    val showBackupReminder: Boolean = true,
+    val showCopyrightWarning: Boolean = true,
+) {
+    val displayName: String
+        get() = userName.trim()
 
-/**
- * Single app-wide DataStore instance.
- *
- * Declared as a top-level delegate because DataStore must not be instantiated more than once
- * per file within a process – doing so would throw on the second access.
- */
+    fun toSerializable(): SerializableAppSettings =
+        SerializableAppSettings(
+            showSongTitle = showSongTitle,
+            showSongPosition = showSongPosition,
+            showPageNumber = showPageNumber,
+            showPageButtons = showPageButtons,
+            announceSongChange = announceSongChange,
+            tapZonesEnabled = tapZonesEnabled,
+            tapZoneSize = tapZoneSize.name,
+            swapTapZones = swapTapZones,
+            pageTurnFlash = pageTurnFlash,
+            songChangeBanner = songChangeBanner,
+            volumeKeysTurnPages = volumeKeysTurnPages,
+            reversePedalDirection = reversePedalDirection,
+            keepScreenOn = keepScreenOn,
+            rememberZoom = rememberZoom,
+            themeMode = themeMode.name,
+            userName = userName,
+            noteAuthorDot = noteAuthorDot,
+            noteAuthorColoredName = noteAuthorColoredName,
+            noteAuthorNumber = noteAuthorNumber,
+            showBackupReminder = showBackupReminder,
+            showCopyrightWarning = showCopyrightWarning,
+        )
+}
+
+fun SerializableAppSettings.toAppSettings(currentSettings: AppSettings): AppSettings =
+    currentSettings.copy(
+        showSongTitle = showSongTitle,
+        showSongPosition = showSongPosition,
+        showPageNumber = showPageNumber,
+        showPageButtons = showPageButtons,
+        announceSongChange = announceSongChange,
+        tapZonesEnabled = tapZonesEnabled,
+        tapZoneSize = runCatching { TapZoneSize.valueOf(tapZoneSize) }.getOrDefault(currentSettings.tapZoneSize),
+        swapTapZones = swapTapZones,
+        pageTurnFlash = pageTurnFlash,
+        songChangeBanner = songChangeBanner,
+        volumeKeysTurnPages = volumeKeysTurnPages,
+        reversePedalDirection = reversePedalDirection,
+        keepScreenOn = keepScreenOn,
+        rememberZoom = rememberZoom,
+        themeMode = runCatching { ThemeMode.valueOf(themeMode) }.getOrDefault(currentSettings.themeMode),
+        userName = userName,
+        noteAuthorDot = noteAuthorDot,
+        noteAuthorColoredName = noteAuthorColoredName,
+        noteAuthorNumber = noteAuthorNumber,
+        showBackupReminder = showBackupReminder,
+        showCopyrightWarning = showCopyrightWarning,
+    )
+
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-/**
- * Persists [AppSettings] in Preferences DataStore.
- *
- * DataStore is used instead of SharedPreferences because it is asynchronous and exposes
- * changes as a [Flow], so the UI recomposes automatically when a setting changes.
- */
 class SettingsRepository(context: Context) {
 
-    // Application context avoids leaking an Activity through the long-lived DataStore.
     private val dataStore = context.applicationContext.settingsDataStore
 
-    /** Current settings; keys that were never written fall back to the [AppSettings] defaults. */
     val settings: Flow<AppSettings> = dataStore.data.map { prefs -> prefs.toAppSettings() }
 
-    /** Atomically reads the current settings, applies [transform] and writes the result back. */
     suspend fun update(transform: (AppSettings) -> AppSettings) {
         dataStore.edit { prefs ->
             prefs.write(transform(prefs.toAppSettings()))
+        }
+    }
+
+    suspend fun ensureUserId() {
+        dataStore.edit { prefs ->
+            if (prefs[Keys.USER_ID].isNullOrBlank()) {
+                prefs[Keys.USER_ID] = UUID.randomUUID().toString()
+            }
         }
     }
 
@@ -98,6 +141,14 @@ class SettingsRepository(context: Context) {
             keepScreenOn = this[Keys.KEEP_SCREEN_ON] ?: defaults.keepScreenOn,
             rememberZoom = this[Keys.REMEMBER_ZOOM] ?: defaults.rememberZoom,
             themeMode = enumOrDefault(this[Keys.THEME_MODE], defaults.themeMode),
+            userName = this[Keys.USER_NAME] ?: defaults.userName,
+            userId = this[Keys.USER_ID] ?: defaults.userId,
+            lastBackupAt = this[Keys.LAST_BACKUP_AT] ?: defaults.lastBackupAt,
+            noteAuthorDot = this[Keys.NOTE_AUTHOR_DOT] ?: defaults.noteAuthorDot,
+            noteAuthorColoredName = this[Keys.NOTE_AUTHOR_COLORED_NAME] ?: defaults.noteAuthorColoredName,
+            noteAuthorNumber = this[Keys.NOTE_AUTHOR_NUMBER] ?: defaults.noteAuthorNumber,
+            showBackupReminder = this[Keys.SHOW_BACKUP_REMINDER] ?: defaults.showBackupReminder,
+            showCopyrightWarning = this[Keys.SHOW_COPYRIGHT_WARNING] ?: defaults.showCopyrightWarning,
         )
     }
 
@@ -117,16 +168,21 @@ class SettingsRepository(context: Context) {
         this[Keys.KEEP_SCREEN_ON] = settings.keepScreenOn
         this[Keys.REMEMBER_ZOOM] = settings.rememberZoom
         this[Keys.THEME_MODE] = settings.themeMode.name
+        this[Keys.USER_NAME] = settings.userName
+        if (settings.userId.isNotBlank()) {
+            this[Keys.USER_ID] = settings.userId
+        }
+        this[Keys.LAST_BACKUP_AT] = settings.lastBackupAt
+        this[Keys.NOTE_AUTHOR_DOT] = settings.noteAuthorDot
+        this[Keys.NOTE_AUTHOR_COLORED_NAME] = settings.noteAuthorColoredName
+        this[Keys.NOTE_AUTHOR_NUMBER] = settings.noteAuthorNumber
+        this[Keys.SHOW_BACKUP_REMINDER] = settings.showBackupReminder
+        this[Keys.SHOW_COPYRIGHT_WARNING] = settings.showCopyrightWarning
     }
 
-    /**
-     * Enums are stored by name so reordering constants cannot silently change a stored value;
-     * a name that no longer exists (e.g. after a downgrade) falls back to the default.
-     */
     private inline fun <reified T : Enum<T>> enumOrDefault(name: String?, default: T): T =
         name?.let { stored -> enumValues<T>().firstOrNull { it.name == stored } } ?: default
 
-    /** Key names are part of the persisted format – never rename them. */
     private object Keys {
         val SHOW_SONG_TITLE = booleanPreferencesKey("show_song_title")
         val SHOW_SONG_POSITION = booleanPreferencesKey("show_song_position")
@@ -143,5 +199,13 @@ class SettingsRepository(context: Context) {
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
         val REMEMBER_ZOOM = booleanPreferencesKey("remember_zoom")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val USER_NAME = stringPreferencesKey("user_name")
+        val USER_ID = stringPreferencesKey("user_id")
+        val LAST_BACKUP_AT = longPreferencesKey("last_backup_at")
+        val NOTE_AUTHOR_DOT = booleanPreferencesKey("note_author_dot")
+        val NOTE_AUTHOR_COLORED_NAME = booleanPreferencesKey("note_author_colored_name")
+        val NOTE_AUTHOR_NUMBER = booleanPreferencesKey("note_author_number")
+        val SHOW_BACKUP_REMINDER = booleanPreferencesKey("show_backup_reminder")
+        val SHOW_COPYRIGHT_WARNING = booleanPreferencesKey("show_copyright_warning")
     }
 }

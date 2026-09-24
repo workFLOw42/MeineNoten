@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import de.workflow42.meinenoten.data.AppSettings
 import de.workflow42.meinenoten.data.SettingsRepository
 import de.workflow42.meinenoten.data.ThemeMode
@@ -56,6 +57,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val settingsRepository = SettingsRepository(this)
+        // Person id for note authorship; a no-op on every start after the first.
+        lifecycleScope.launch { settingsRepository.ensureUserId() }
 
         setContent {
             // Null until DataStore has answered – deliberately not AppSettings(), which would
@@ -120,6 +123,7 @@ class MainActivity : ComponentActivity() {
                         // A tap skips the wait, and while visible it keeps touches from
                         // reaching the list underneath.
                         LaunchScreen(
+                            userName = settings.displayName,
                             modifier = Modifier.pointerInput(Unit) {
                                 detectTapGestures { showLaunchScreen = false }
                             },

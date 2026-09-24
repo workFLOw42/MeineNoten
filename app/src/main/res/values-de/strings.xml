@@ -180,10 +180,76 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Hell</string>
     <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_section_person">Person</string>
+    <string name="settings_user_name">Dein Name</string>
+    <string name="settings_user_name_hint">Steht an deinen Notizen und im Titel. Leer = „Meine Noten“.</string>
+    <string name="settings_section_other_notes">Notizen anderer</string>
+    <string name="settings_note_author_dot">Farbpunkt vor dem Namen</string>
+    <string name="settings_note_author_colored_name">Name in der Farbe der Person</string>
+    <string name="settings_note_author_number">Nummer bei gleichen Namen („Anna · 2“)</string>
+    <string name="app_title_personal">%1$s Noten</string>
+    <string name="possessive_rule">de</string>
+    <string name="note_author_unknown">Unbekannt</string>
+    <string name="note_author_numbered">%1$s · %2$d</string>
+    <string name="label_own_note">Meine Notiz (z. B. Kapodaster, Stimmung)</string>
+    <string name="label_other_notes">Notizen anderer</string>
+    <string name="cd_delete_note">Notiz von %1$s löschen</string>
+    <string name="cd_show_note">Notiz von %1$s anzeigen</string>
     <string name="settings_version">Version %1$s (%2$d)</string>
 
     <!-- Voreinstellungen -->
     <string name="default_song_title">Neues Lied</string>
+
+    <!-- Datensicherung & Austausch -->
+    <string name="settings_section_backup">Datensicherung</string>
+    <string name="settings_section_hinweise">Hinweise</string>
+    <string name="settings_backup_full">Alles sichern</string>
+    <string name="settings_backup_full_hint">Erstellt eine ZIP-Datei mit allen Liedern, Noten, Setlisten und Einstellungen</string>
+    <string name="settings_restore">Sicherung einlesen</string>
+    <string name="settings_restore_hint">Liest eine gesicherte oder geteilte ZIP-Datei ein</string>
+    <string name="settings_show_backup_reminder">Backup-Erinnerung (30 Tage) anzeigen</string>
+    <string name="settings_privacy_notice_title">Datenschutz-Hinweis</string>
+    <string name="settings_privacy_notice_body">Meine Noten arbeitet vollständig offline und benötigt keine Internetverbindung. Alle Noten, Setlisten und Notizen verbleiben lokal auf diesem Gerät.</string>
+    <string name="settings_show_copyright_warning">Urheberrechtshinweis beim Setlist-Teilen anzeigen</string>
+    <string name="settings_last_backup">Letzte Sicherung: vor %1$d Tagen</string>
+    <string name="settings_last_backup_today">Letzte Sicherung: heute</string>
+    <string name="settings_last_backup_yesterday">Letzte Sicherung: gestern</string>
+    <string name="settings_last_backup_never">Letzte Sicherung: Nie</string>
+    <string name="action_share_setlist">Setlist teilen</string>
+    <string name="dialog_copyright_title">Urheberrechtshinweis</string>
+    <string name="dialog_copyright_msg">Gekaufte Noten dürfen meist nicht weitergegeben werden. Bitte vergewissere dich, dass du die erforderlichen Rechte zur Weitergabe dieser Notendateien besitzt.</string>
+    <string name="dialog_copyright_confirm">Verstanden und teilen</string>
+    <string name="backup_reminder_title">Datensicherung empfohlen</string>
+    <string name="backup_reminder_msg">Die letzte Sicherung liegt über 30 Tage zurück. Sichere deine Lieder und Noten, damit keine Daten verloren gehen.</string>
+    <string name="backup_reminder_action">Jetzt sichern</string>
+    <string name="backup_reminder_dismiss">Später</string>
+    <string name="dialog_copyright_dont_show_again">Nicht wieder anzeigen</string>
+    <string name="compare_title">Sicherung einlesen</string>
+    <string name="compare_header_info">%1$s · %2$s · %3$s · %4$s</string>
+    <string name="compare_header_counts">%1$d Lieder, %2$d Setlisten</string>
+    <string name="compare_quick_suggested">Alles wie vorgeschlagen</string>
+    <string name="compare_quick_new_only">Nur Neue</string>
+    <string name="compare_quick_replace_all">Alles ersetzen</string>
+    <string name="compare_cat_identical">Identisch (%1$d)</string>
+    <string name="compare_cat_different_meta">Gleiche Noten, andere Angaben (%1$d)</string>
+    <string name="compare_cat_possible_other">Mögliche andere Fassung (%1$d)</string>
+    <string name="compare_cat_new">Neu (%1$d)</string>
+    <string name="compare_cat_setlists">Setlisten (%1$d)</string>
+    <string name="compare_cat_settings">Einstellungen</string>
+    <string name="compare_choice_keep_own">Meins behalten</string>
+    <string name="compare_choice_take_backup">Aus Sicherung übernehmen</string>
+    <string name="compare_choice_keep_both">Beide behalten</string>
+    <string name="compare_choice_skip">Überspringen</string>
+    <string name="compare_merge_notes">Fremde Notizen ergänzen</string>
+    <string name="compare_import_action">Einlesen</string>
+    <string name="compare_import_now">Jetzt importieren</string>
+    <string name="compare_replace_all_warning">Möchtest du wirklich deinen gesamten aktuellen Bestand durch diese Sicherung ersetzen? Alle lokalen Lieder und Setlisten werden vorher gelöscht.</string>
+    <string name="compare_replace_all_confirm">Ja, alles ersetzen</string>
+    <string name="error_backup_read_failed">Sicherung konnte nicht gelesen werden</string>
+    <string name="error_missing_song_file">Für „%1$s“ fehlt die Notendatei.</string>
+    <string name="backup_in_progress_title">Sicherung wird erstellt…</string>
+    <string name="backup_progress_start">Vorbereitung…</string>
+    <string name="backup_progress_message">Lied %1$d von %2$d: %3$s</string>
 
     <plurals name="song_count">
         <item quantity="one">%1$d Lied</item>

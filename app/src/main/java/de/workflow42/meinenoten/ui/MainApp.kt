@@ -1,6 +1,8 @@
 package de.workflow42.meinenoten.ui
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.Subject
@@ -49,12 +51,19 @@ import de.workflow42.meinenoten.model.SongSource
 import de.workflow42.meinenoten.ui.components.DateField
 import de.workflow42.meinenoten.ui.components.DeleteSongDialog
 import de.workflow42.meinenoten.ui.components.EditSongDialog
+import de.workflow42.meinenoten.model.authorNumbers
 import de.workflow42.meinenoten.ui.components.GenreChips
 import de.workflow42.meinenoten.ui.components.InputDialogProperties
 import de.workflow42.meinenoten.ui.components.PdfPreloader
 import de.workflow42.meinenoten.ui.components.SetlistStrip
+import de.workflow42.meinenoten.data.BackupRepository
+import de.workflow42.meinenoten.model.BackupAnalysisResult
+import de.workflow42.meinenoten.model.BackupType
+import de.workflow42.meinenoten.ui.components.CopyrightDialog
+import de.workflow42.meinenoten.ui.screens.BackupCompareScreen
 import de.workflow42.meinenoten.ui.screens.SetlistDetailScreen
 import de.workflow42.meinenoten.ui.screens.SetlistScreen
+import de.workflow42.meinenoten.ui.screens.SettingsScreen
 import de.workflow42.meinenoten.ui.screens.SongDetailScreen
 import de.workflow42.meinenoten.ui.screens.SongListScreen
 import java.util.UUID
@@ -148,11 +157,43 @@ fun MainApp(
         mutableStateListOf<Setlist>()
     }
 
+    var songsLoaded by remember { mutableStateOf(value = false) }
+
     LaunchedEffect(Unit) {
         songs.clear()
         songs.addAll(repository.loadSongs())
         setlists.clear()
         setlists.addAll(repository.loadSetlists())
+        songsLoaded = true
+
+        // Checksums for songs imported before they existed. Off the main thread, as a
+        // large library means reading every file once; merged by id so edits made in
+        // the meantime are kept.
+        val hashed = withContext(Dispatchers.IO) { repository.computeMissingHashes(songs.toList()) }
+        if (hashed.isNotEmpty()) {
+            hashed.forEach { withHash ->
+                val idx = songs.indexOfFirst { it.id == withHash.id }
+                if (idx != -1 && songs[idx].fileUri == withHash.fileUri) {
+                    songs[idx] = songs[idx].copy(fileHash = withHash.fileHash)
+                }
+            }
+            repository.saveSongs(songs)
+        }
+    }
+
+    // A memo from before notes had an author becomes the own note. Waits for the person
+    // id, which DataStore delivers a moment after the songs; idempotent afterwards.
+    LaunchedEffect(songsLoaded, settings.userId) {
+        if (!songsLoaded || settings.userId.isBlank()) return@LaunchedEffect
+        var changed = false
+        songs.indices.forEach { i ->
+            val migrated = songs[i].migrateLegacyNote(settings.userId, settings.displayName)
+            if (migrated != songs[i]) {
+                songs[i] = migrated
+                changed = true
+            }
+        }
+        if (changed) repository.saveSongs(songs)
     }
 
     var showImportDialog by remember { mutableStateOf(value = false) }
@@ -216,6 +257,99 @@ fun MainApp(
                     }
                 }
                 .onFailure { it.printStackTrace() }
+        }
+    }
+
+    val backupRepository = remember { BackupRepository(context, repository) }
+    var pendingSetlistToShare by remember { mutableStateOf<Setlist?>(null) }
+    var showCopyrightDialog by remember { mutableStateOf(false) }
+    var pendingBackupAnalysis by remember { mutableStateOf<BackupAnalysisResult?>(null) }
+    var isBackingUp by remember { mutableStateOf(false) }
+    var backupProgressMessage by remember { mutableStateOf<String?>(null) }
+
+    val fullBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri != null) {
+            isBackingUp = true
+            val startMsg = context.getString(R.string.backup_progress_start)
+            backupProgressMessage = startMsg
+            drawerScope.launch(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        backupRepository.createFullBackupZip(out, songs.toList(), setlists.toList(), settings) { current, total, title ->
+                            val msg = context.getString(R.string.backup_progress_message, current, total, title)
+                            drawerScope.launch(Dispatchers.Main) {
+                                backupProgressMessage = msg
+                            }
+                        }
+                    }
+                }.onSuccess {
+                    withContext(Dispatchers.Main) {
+                        onSettingsChange(settings.copy(lastBackupAt = System.currentTimeMillis()))
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    isBackingUp = false
+                    backupProgressMessage = null
+                }
+            }
+        }
+    }
+
+    val setlistBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        val setlistToShare = pendingSetlistToShare
+        pendingSetlistToShare = null
+        if (uri != null && setlistToShare != null) {
+            isBackingUp = true
+            val startMsg = context.getString(R.string.backup_progress_start)
+            backupProgressMessage = startMsg
+            drawerScope.launch(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        backupRepository.createSetlistBackupZip(out, setlistToShare, songs.toList(), settings) { current, total, title ->
+                            val msg = context.getString(R.string.backup_progress_message, current, total, title)
+                            drawerScope.launch(Dispatchers.Main) {
+                                backupProgressMessage = msg
+                            }
+                        }
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    isBackingUp = false
+                    backupProgressMessage = null
+                }
+            }
+        }
+    }
+
+    val handleShareSetlist: (Setlist) -> Unit = { setlist ->
+        pendingSetlistToShare = setlist
+        if (settings.showCopyrightWarning) {
+            showCopyrightDialog = true
+        } else {
+            val fn = backupRepository.generateBackupFilename(BackupType.SETLIST, setlist.title, settings.displayName)
+            setlistBackupLauncher.launch(fn)
+        }
+    }
+
+    val restoreBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            drawerScope.launch(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        backupRepository.readAndAnalyzeBackupArchive(input, songs.toList(), setlists.toList())
+                    }
+                }.onSuccess { analysis ->
+                    withContext(Dispatchers.Main) {
+                        pendingBackupAnalysis = analysis
+                    }
+                }
+            }
         }
     }
 
@@ -491,6 +625,8 @@ fun MainApp(
         val song = songs.firstOrNull { it.id == editing.id } ?: editing
         EditSongDialog(
             song = song,
+            settings = settings,
+            authorNumbers = authorNumbers(songs),
             songSetlists = setlists.filter { it.songIds.contains(song.id) },
             knownGenres = knownGenres,
             onSave = { updatedSong ->
@@ -702,6 +838,40 @@ fun MainApp(
         )
     }
 
+    if (showCopyrightDialog && pendingSetlistToShare != null) {
+        CopyrightDialog(
+            onConfirm = { dontShowAgain ->
+                showCopyrightDialog = false
+                if (dontShowAgain) onSettingsChange(settings.copy(showCopyrightWarning = false))
+                val fn = backupRepository.generateBackupFilename(BackupType.SETLIST, pendingSetlistToShare?.title, settings.displayName)
+                setlistBackupLauncher.launch(fn)
+            },
+            onDismiss = { dontShowAgain ->
+                showCopyrightDialog = false
+                pendingSetlistToShare = null
+                if (dontShowAgain) onSettingsChange(settings.copy(showCopyrightWarning = false))
+            },
+        )
+    }
+
+    if (isBackingUp) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(R.string.backup_in_progress_title)) },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(backupProgressMessage ?: stringResource(R.string.backup_progress_start))
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
     val entryProvider: (NavKey) -> NavEntry<NavKey> = entryProvider {
         entry<AppRoute.Songs>(
             metadata = ListDetailSceneStrategy.listPane(
@@ -715,6 +885,12 @@ fun MainApp(
             SongListScreen(
                 songs = songs,
                 setlists = setlists,
+                lastBackupAt = settings.lastBackupAt,
+                showBackupReminder = settings.showBackupReminder,
+                onNavigateToSettings = { navigator.navigate(AppRoute.Settings) },
+                onDisableBackupReminder = {
+                    onSettingsChange(settings.copy(showBackupReminder = false))
+                },
                 onSongClick = { song, filterSetlistId ->
                     markSongOpened(song.id)
                     navigator.navigate(
@@ -729,12 +905,16 @@ fun MainApp(
                     )
                 },
                 onImportPdf = {
-                    pdfLauncher.launch(documentMimeTypes)
+                    if (!isBackingUp) pdfLauncher.launch(documentMimeTypes)
                 },
-                onAddManual = { showAddManualSongDialog = true },
+                onAddManual = {
+                    if (!isBackingUp) showAddManualSongDialog = true
+                },
                 onAddToSetlist = { showAddToSetlistDialog = it },
                 onEditSong = { songToEdit = it },
-                onDeleteSong = { songToDelete = it },
+                onDeleteSong = {
+                    if (!isBackingUp) songToDelete = it
+                },
                 onMenuClick = openDrawer,
             )
         }
@@ -765,7 +945,10 @@ fun MainApp(
                     showCreateSetlistDialog = true
                 },
                 onDuplicateSetlist = { duplicateSetlist(it) },
-                onDeleteSetlist = { setlistToDelete = it },
+                onDeleteSetlist = {
+                    if (!isBackingUp) setlistToDelete = it
+                },
+                onShareSetlist = handleShareSetlist,
             )
         }
         entry<AppRoute.Settings> {
@@ -773,6 +956,13 @@ fun MainApp(
                 settings = settings,
                 onSettingsChange = onSettingsChange,
                 onMenuClick = openDrawer,
+                onExportBackup = {
+                    val fn = backupRepository.generateBackupFilename(BackupType.KOMPLETT, userName = settings.displayName)
+                    fullBackupLauncher.launch(fn)
+                },
+                onRestoreBackup = {
+                    restoreBackupLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*"))
+                },
             )
         }
         entry<AppRoute.SongDetail>(
@@ -794,6 +984,7 @@ fun MainApp(
                     onMenuClick = openDrawer,
                     showLyrics = lyricsSongId == song.id,
                     setlistSongs = setlistSongs,
+                    authorNumbers = remember(songs.toList()) { authorNumbers(songs) },
                     onNavigateToSong = { target, openAtEnd ->
                         navigator.replace(
                             AppRoute.SongDetail(
@@ -867,6 +1058,7 @@ fun MainApp(
                 SetlistDetailScreen(
                     setlist = setlist,
                     songs = songs,
+                    onShareSetlist = handleShareSetlist,
                     onSongClick = {
                         markSongOpened(it.id)
                         markSetlistPlayed(setlist.id)
@@ -946,47 +1138,103 @@ fun MainApp(
         action()
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        // No edge swipe in the score view: it would fight with panning a zoomed page.
-        gesturesEnabled = drawerState.isOpen || (songRoute == null),
-        drawerContent = {
-            AppDrawerContent(
-                songCount = songs.size,
-                setlistCount = setlists.size,
-                selectedTopLevel = navigationState.topLevelRoute,
-                onNavigate = { route -> closeDrawerThen { navigator.navigate(route) } },
-                currentSong = currentSong,
-                showingLyrics = (currentSong != null) && (lyricsSongId == currentSong.id),
-                onEditSong = { closeDrawerThen { songToEdit = currentSong } },
-                onAddToSetlist = { closeDrawerThen { showAddToSetlistDialog = currentSong } },
-                onToggleLyrics = {
-                    closeDrawerThen {
-                        lyricsSongId = if (lyricsSongId == currentSong?.id) null else currentSong?.id
-                    }
-                },
-                onDeleteSong = { closeDrawerThen { songToDelete = currentSong } },
-                runningOrder = runningOrder,
-                onSongClick = { target ->
-                    closeDrawerThen {
-                        markSongOpened(target.id)
-                        markSetlistPlayed(songRoute?.setlistId)
-                        navigator.replace(
-                            AppRoute.SongDetail(
-                                songId = target.id,
-                                setlistId = songRoute?.setlistId,
-                                startPage = 0,
-                            )
+    val analysisToCompare = pendingBackupAnalysis
+    if (analysisToCompare != null) {
+        BackupCompareScreen(
+            analysisResult = analysisToCompare,
+            onApplyImport = { replaceAll ->
+                isBackingUp = true
+                val startMsg = context.getString(R.string.backup_progress_start)
+                backupProgressMessage = startMsg
+                drawerScope.launch(Dispatchers.IO) {
+                    runCatching {
+                        backupRepository.applyBackupImport(
+                            analysis = analysisToCompare,
+                            localSongs = songs.toList(),
+                            localSetlists = setlists.toList(),
+                            currentSettings = settings,
+                            onSaveSongs = { newSongs ->
+                                songs.clear()
+                                songs.addAll(newSongs)
+                                repository.saveSongs(songs)
+                            },
+                            onSaveSetlists = { newSetlists ->
+                                setlists.clear()
+                                setlists.addAll(newSetlists)
+                                repository.saveSetlists(setlists)
+                            },
+                            onSaveSettings = { newSettings ->
+                                onSettingsChange(newSettings)
+                            },
+                            replaceAll = replaceAll,
+                            onProgress = { current, total, title ->
+                                val msg = context.getString(R.string.backup_progress_message, current, total, title)
+                                drawerScope.launch(Dispatchers.Main) {
+                                    backupProgressMessage = msg
+                                }
+                            }
                         )
+                    }.onFailure { it.printStackTrace() }
+                    withContext(Dispatchers.Main) {
+                        isBackingUp = false
+                        backupProgressMessage = null
+                        pendingBackupAnalysis = null
                     }
-                },
-            )
-        },
-    ) {
-        NavDisplay(
-            entries = navigationState.toEntries(entryProvider),
-            onBack = { navigator.goBack() },
-            sceneStrategies = listOf(listDetailStrategy)
+                }
+            },
+            onCancel = {
+                drawerScope.launch(Dispatchers.IO) {
+                    analysisToCompare.tempDir.deleteRecursively()
+                    withContext(Dispatchers.Main) {
+                        pendingBackupAnalysis = null
+                    }
+                }
+            }
         )
+    } else {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            // No edge swipe in the score view: it would fight with panning a zoomed page.
+            gesturesEnabled = drawerState.isOpen || (songRoute == null),
+            drawerContent = {
+                AppDrawerContent(
+                    songCount = songs.size,
+                    setlistCount = setlists.size,
+                    selectedTopLevel = navigationState.topLevelRoute,
+                    onNavigate = { route -> closeDrawerThen { navigator.navigate(route) } },
+                    currentSong = currentSong,
+                    showingLyrics = (currentSong != null) && (lyricsSongId == currentSong.id),
+                    onEditSong = { closeDrawerThen { songToEdit = currentSong } },
+                    onAddToSetlist = { closeDrawerThen { showAddToSetlistDialog = currentSong } },
+                    onToggleLyrics = {
+                        closeDrawerThen {
+                            lyricsSongId = if (lyricsSongId == currentSong?.id) null else currentSong?.id
+                        }
+                    },
+                    onDeleteSong = { closeDrawerThen { songToDelete = currentSong } },
+                    runningOrder = runningOrder,
+                    userName = settings.displayName,
+                    onSongClick = { target ->
+                        closeDrawerThen {
+                            markSongOpened(target.id)
+                            markSetlistPlayed(songRoute?.setlistId)
+                            navigator.replace(
+                                AppRoute.SongDetail(
+                                    songId = target.id,
+                                    setlistId = songRoute?.setlistId,
+                                    startPage = 0,
+                                )
+                            )
+                        }
+                    },
+                )
+            },
+        ) {
+            NavDisplay(
+                entries = navigationState.toEntries(entryProvider),
+                onBack = { navigator.goBack() },
+                sceneStrategies = listOf(listDetailStrategy)
+            )
+        }
     }
 }

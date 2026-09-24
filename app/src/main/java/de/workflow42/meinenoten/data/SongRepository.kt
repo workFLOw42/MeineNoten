@@ -37,6 +37,7 @@ class SongRepository(private val context: Context) {
             title = title,
             fileUri = Uri.fromFile(destFile).toString(),
             sourceType = sourceType,
+            fileHash = FileHash.of(destFile),
         )
     }
 
@@ -109,14 +110,16 @@ class SongRepository(private val context: Context) {
         val destFile = copyToStorage(uri, song.id, extension, sourceType)
 
         // Only after the copy succeeded, otherwise a failed import would leave the song
-        // pointing at a file that is already gone.
-        deleteSongFile(song)
+        // pointing at a file that is already gone. Skipped when the extension is
+        // unchanged: the copy has just overwritten the old file in place.
+        if (song.fileUri.toUri().path != destFile.path) deleteSongFile(song)
 
         return song.copy(
             fileUri = Uri.fromFile(destFile).toString(),
             sourceType = sourceType,
             lastPage = 0,
             pageViews = emptyMap(),
+            fileHash = FileHash.of(destFile),
         )
     }
 
@@ -133,8 +136,28 @@ class SongRepository(private val context: Context) {
             sourceType = SongSource.TEXT,
             lastPage = 0,
             pageViews = emptyMap(),
+            fileHash = "",
         )
     }
+
+    /** The stored score file of [song], or null for text songs and missing files. */
+    fun fileOf(song: Song): File? {
+        if (song.fileUri.isBlank()) return null
+        return runCatching { song.fileUri.toUri().path?.let(::File) }.getOrNull()
+            ?.takeIf { it.isFile }
+    }
+
+    /**
+     * Songs with a file but no [Song.fileHash] yet, with the hash filled in.
+     *
+     * For songs imported before hashes existed. Blocking I/O: call off the main thread.
+     * Songs whose file is missing are left out, so they are retried next time.
+     */
+    fun computeMissingHashes(songs: List<Song>): List<Song> =
+        songs.filter { it.hasFile && it.fileHash.isBlank() }.mapNotNull { song ->
+            val file = fileOf(song) ?: return@mapNotNull null
+            runCatching { song.copy(fileHash = FileHash.of(file)) }.getOrNull()
+        }
 
     /**
      * Deletes the imported file belonging to a song.
@@ -182,8 +205,8 @@ class SongRepository(private val context: Context) {
      * conversion is idempotent.
      */
     private fun migrateTextSong(song: Song): Song =
-        if (!song.hasFile && song.lyrics.isBlank() && song.notes.isNotBlank()) {
-            song.copy(lyrics = song.notes, notes = "")
+        if (!song.hasFile && song.lyrics.isBlank() && song.legacyNotes.isNotBlank()) {
+            song.copy(lyrics = song.legacyNotes, legacyNotes = "")
         } else {
             song
         }

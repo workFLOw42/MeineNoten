@@ -181,12 +181,81 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
+    <string name="settings_section_person">Person</string>
+    <string name="settings_user_name">Your name</string>
+    <string name="settings_user_name_hint">Shown with your notes and in the title. Empty = “Meine Noten”.</string>
+    <string name="settings_section_other_notes">Notes by others</string>
+    <string name="settings_note_author_dot">Coloured dot before the name</string>
+    <string name="settings_note_author_colored_name">Name in the person’s colour</string>
+    <string name="settings_note_author_number">Number for identical names (“Anna · 2”)</string>
+    <!-- Personal title, e.g. "Anna's Sheets". %1$s is already in possessive form. -->
+    <string name="app_title_personal">%1$s Sheets</string>
+    <!-- Grammar used for the possessive: "de" or "en". -->
+    <string name="possessive_rule">en</string>
+    <string name="note_author_unknown">Unknown</string>
+    <!-- "Anna · 2": name, number among people sharing that name. -->
+    <string name="note_author_numbered">%1$s · %2$d</string>
+    <string name="label_own_note">My note (e.g. capo, tuning)</string>
+    <string name="label_other_notes">Notes by others</string>
+    <string name="cd_delete_note">Delete note by %1$s</string>
+    <string name="cd_show_note">Show note by %1$s</string>
     <string name="settings_version">Version %1$s (%2$d)</string>
     <!-- Author credit, identical in every language. -->
-    <string name="settings_by" translatable="false">by workFLOw42</string>
+    <string name="settings_by" translatable="false">by workFLOw42 · ©2026</string>
 
     <!-- Defaults -->
     <string name="default_song_title">New Song</string>
+
+    <!-- Data Backup & Exchange -->
+    <string name="settings_section_backup">Data Backup</string>
+    <string name="settings_section_hinweise">Notices</string>
+    <string name="settings_backup_full">Back up everything</string>
+    <string name="settings_backup_full_hint">Creates a ZIP file containing all songs, scores, setlists, and settings</string>
+    <string name="settings_restore">Restore backup</string>
+    <string name="settings_restore_hint">Imports a saved or shared ZIP file</string>
+    <string name="settings_show_backup_reminder">Show 30-day backup reminder</string>
+    <string name="settings_privacy_notice_title">Privacy Notice</string>
+    <string name="settings_privacy_notice_body">Meine Noten works entirely offline and does not require an internet connection. All sheet music, setlists, and notes remain local on this device.</string>
+    <string name="settings_show_copyright_warning">Show copyright warning when sharing setlist</string>
+    <string name="settings_last_backup">Last backup: %1$d days ago</string>
+    <string name="settings_last_backup_today">Last backup: today</string>
+    <string name="settings_last_backup_yesterday">Last backup: yesterday</string>
+    <string name="settings_last_backup_never">Last backup: Never</string>
+    <string name="action_share_setlist">Share setlist</string>
+    <string name="dialog_copyright_title">Copyright Notice</string>
+    <string name="dialog_copyright_msg">Purchased sheet music usually may not be redistributed. Please make sure you have the required rights to share these sheet music files.</string>
+    <string name="dialog_copyright_confirm">Understand and share</string>
+    <string name="backup_reminder_title">Backup recommended</string>
+    <string name="backup_reminder_msg">Your last backup was over 30 days ago. Back up your songs and scores to prevent data loss.</string>
+    <string name="backup_reminder_action">Back up now</string>
+    <string name="backup_reminder_dismiss">Later</string>
+    <string name="dialog_copyright_dont_show_again">Don\'t show again</string>
+    <string name="compare_title">Restore Backup</string>
+    <string name="compare_header_info">%1$s · %2$s · %3$s · %4$s</string>
+    <string name="compare_header_counts">%1$d songs, %2$d setlists</string>
+    <string name="compare_quick_suggested">Everything as proposed</string>
+    <string name="compare_quick_new_only">New only</string>
+    <string name="compare_quick_replace_all">Replace everything</string>
+    <string name="compare_cat_identical">Identical (%1$d)</string>
+    <string name="compare_cat_different_meta">Same score, different info (%1$d)</string>
+    <string name="compare_cat_possible_other">Possible other version (%1$d)</string>
+    <string name="compare_cat_new">New (%1$d)</string>
+    <string name="compare_cat_setlists">Setlists (%1$d)</string>
+    <string name="compare_cat_settings">Settings</string>
+    <string name="compare_choice_keep_own">Keep mine</string>
+    <string name="compare_choice_take_backup">Take from backup</string>
+    <string name="compare_choice_keep_both">Keep both</string>
+    <string name="compare_choice_skip">Skip</string>
+    <string name="compare_merge_notes">Add foreign notes</string>
+    <string name="compare_import_action">Import</string>
+    <string name="compare_import_now">Import now</string>
+    <string name="compare_replace_all_warning">Do you really want to replace your entire current collection with this backup? All local songs and setlists will be deleted first.</string>
+    <string name="compare_replace_all_confirm">Yes, replace everything</string>
+    <string name="error_backup_read_failed">Backup could not be read</string>
+    <string name="error_missing_song_file">Score file missing for \"%1$s\".</string>
+    <string name="backup_in_progress_title">Creating backup...</string>
+    <string name="backup_progress_start">Preparing...</string>
+    <string name="backup_progress_message">Song %1$d of %2$d: %3$s</string>
 
     <plurals name="song_count">
         <item quantity="one">%1$d song</item>

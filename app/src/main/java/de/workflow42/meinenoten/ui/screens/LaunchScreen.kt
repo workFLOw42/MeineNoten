@@ -23,12 +23,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import de.workflow42.meinenoten.R
 import de.workflow42.meinenoten.ui.components.VersionFooter
+import de.workflow42.meinenoten.ui.components.appTitle
 import de.workflow42.meinenoten.ui.theme.MeineNotenTheme
 import kotlin.math.max
 
@@ -44,7 +44,11 @@ import kotlin.math.max
  * remaining space, above and below, simply stays white.
  */
 @Composable
-fun LaunchScreen(modifier: Modifier = Modifier) {
+fun LaunchScreen(
+    modifier: Modifier = Modifier,
+    /** Entered name; turns the heading into "‹Name›s Noten". */
+    userName: String = "",
+) {
     val blue = colorResource(R.color.ic_launcher_background)
     val ink = Color.Black
 
@@ -94,7 +98,7 @@ fun LaunchScreen(modifier: Modifier = Modifier) {
         )
 
         Text(
-            text = stringResource(R.string.app_name),
+            text = appTitle(userName),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = ink,
