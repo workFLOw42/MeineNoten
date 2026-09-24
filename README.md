@@ -1,3 +1,5 @@
+![Meine Noten](docs/images/header.png)
+
 # Meine Noten
 
 Eine Android-App, die eingescannte und digitale Notenblätter auf dem Tablet anzeigt –
@@ -19,6 +21,10 @@ einzigen, blind ausführbaren Berührung.
 * **Setlists** – Reihenfolge vorbereiten, am Liedende direkt ins nächste Stück, dort
   weitermachen, wo man aufgehört hat
 * **Suchen, Filtern, Sortieren** – in Songliste und Setlists, mit Buchstabenleiste
+* **Persönlich** – eigener Name im Titel („Flos Noten“) und an den eigenen Notizen
+* **Notizen pro Person** – eigene und fremde Notizen je Lied, fremde einzeln einblendbar
+* **Datensicherung als ZIP** – alles sichern, Setlist samt Noten teilen, Sicherungen
+  mit Vergleich einlesen
 * **Einstellbar** – Statusleiste, Tippzonen, Pedalrichtung, Design (System/Hell/Dunkel)
 * **Offline** – keine Internetverbindung, keine Android-Berechtigung, kein Konto
 
@@ -93,6 +99,46 @@ Wird ein Lied **aus einer Setlist heraus** geöffnet, blättert man am Ende der 
 Seite direkt in das nächste Stück – das Pedal funktioniert also über die gesamte Setlist
 hinweg. Aus der Songliste geöffnet bleibt die Anzeige an den Liedgrenzen stehen.
 
+### Name und Notizen
+
+In den *Einstellungen* unter *Person* lässt sich ein Name eintragen. Er erscheint im
+Titel – aus „Flo“ wird **Flos Noten**, aus „Hans“ **Hans’ Noten** – und steht an den
+eigenen Notizen. Leer bleibt es bei *Meine Noten*.
+
+Jedes Lied kann Notizen mehrerer Personen tragen, etwa nach dem Einlesen der Sicherung
+eines anderen Chormitglieds. Die eigene Notiz ist bearbeitbar, fremde lassen sich lesen
+und löschen. In der Notenansicht sind fremde Notizen zunächst ausgeblendet und pro
+Person einschaltbar. Wie Personen unterschieden werden – Farbpunkt, Name in der Farbe
+der Person, Nummer bei gleichen Namen („Anna · 2“) –, legt man unter *Notizen anderer*
+fest.
+
+### Datensicherung und Austausch
+
+Unter *Einstellungen → Datensicherung*:
+
+| Aktion | Ergebnis |
+|---|---|
+| **Alles sichern** | ZIP mit allen Liedern, Notendateien, Setlists und Einstellungen |
+| **Setlist teilen** (Menü einer Setlist) | ZIP mit einer Setlist, ihren Liedern und deren Noten |
+| **Sicherung einlesen** | liest beide Arten ein, mit Vergleich zum eigenen Bestand |
+
+Gespeichert wird über die Dateiauswahl von Android – in den Download-Ordner, auf einen
+USB-Stick oder über die Drive-App in Google Drive. Der Dateiname sagt, was drinsteckt:
+`20261004_Komplett_SM-P610_Flo.zip`.
+
+Beim **Einlesen** wird nichts blind überschrieben. Die App zeigt alle Lieder der Datei,
+eingeteilt in *Gleiche Noten, andere Angaben*, *Mögliche andere Fassung*, *Neu* und
+*Identisch*, und bei Unterschieden die Angaben nebeneinander. Pro Lied: *Meins behalten*,
+*Aus Sicherung übernehmen* oder *Beide behalten*. Schnellwahlen oben: *Alles wie
+vorgeschlagen*, *Nur Neue*, *Alles ersetzen*. Setlists verweisen danach auf die eigenen
+Lieder, ohne Dubletten.
+
+> Gekaufte Noten dürfen meist nicht weitergegeben werden. *Setlist teilen* weist vor dem
+> Erstellen darauf hin; die Verantwortung liegt beim Nutzer.
+
+Liegt die letzte Sicherung mehr als 30 Tage zurück, erinnert ein Hinweis in der
+Songliste daran – nie in der Notenansicht.
+
 ### Einstellungen
 
 | Bereich | Einstellbar |
@@ -101,9 +147,14 @@ hinweg. Aus der Songliste geöffnet bleibt die Anzeige an den Liedgrenzen stehen
 | Umblättern | Tippzonen an/aus, Größe (unteres Drittel, untere Hälfte, ganze Höhe), Seiten tauschen, grüner Rand, Titel beim Liedwechsel |
 | Pedal & Tasten | Lautstärketasten blättern, Richtung umkehren |
 | Anzeige | Bildschirm bleibt an, Zoom pro Seite merken, Design |
+| Person | eigener Name für Titel und Notizen |
+| Datensicherung | Alles sichern, Sicherung einlesen, Datum der letzten Sicherung |
+| Notizen anderer | Farbpunkt, Name in Personenfarbe, Nummer bei gleichen Namen |
+| Hinweise | Backup-Erinnerung, Urheberrechtshinweis beim Setlist-Teilen |
 
 Ab Werk ist alles eingeschaltet außer den beiden Umkehrungen (Tippzonen tauschen,
 Pedalrichtung). Die Tippzonen liegen im unteren Drittel, das Design folgt dem System.
+Bei *Notizen anderer* ist ab Werk nur *Name in der Farbe der Person* aktiv.
 
 ## Technik
 
@@ -115,6 +166,7 @@ Pedalrichtung). Die Tippzonen liegen im unteren Drittel, das Design folgt dem Sy
 | PDF | `PdfRenderer` (Framework, keine externe Bibliothek) |
 | MusicXML | OpenSheetMusicDisplay im WebView, offline als Asset |
 | Speicherung | JSON über kotlinx.serialization, Einstellungen per DataStore |
+| Sicherung | ZIP mit Manifest und SHA-256-Prüfsummen, `java.util.zip` |
 | Start | SplashScreen-API mit nahtlosem Compose-Startbildschirm |
 | `minSdk` | 26 (Android 8.0) |
 | `targetSdk` | 36 |
@@ -155,10 +207,15 @@ Serialisierung der Daten und die WebView-Brücke zu OpenSheetMusicDisplay breche
 ## Datenschutz
 
 Die App erhebt keine Daten, fordert keine Berechtigungen an und verbindet sich nicht mit
-dem Internet. Alle Noten bleiben im privaten Speicher der App auf dem Gerät. Details in
-der [Datenschutzerklärung](https://workFLOw42.github.io/MeineNoten/docs/privacy-policy.html).
+dem Internet. Alle Noten bleiben im privaten Speicher der App auf dem Gerät. Eine
+Sicherung verlässt das Gerät nur als Datei, die man selbst speichert oder teilt. Details
+in der [Datenschutzerklärung](https://workFLOw42.github.io/MeineNoten/docs/privacy-policy.html).
 
 ## Lizenzen
 
 Diese App verwendet [OpenSheetMusicDisplay](https://opensheetmusicdisplay.org/)
 (BSD-3-Clause) zur Darstellung von MusicXML.
+
+---
+
+<p align="center">by workFLOw42 · ©2026</p>

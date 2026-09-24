@@ -42,6 +42,11 @@ Seitenaufbau, keine Fehlbedienung durch versehentliches Antippen.
 | Daten | Setlists durchsuchen (auch nach enthaltenen Liedern), nach Zeitraum filtern, drei Sortiermodi |
 | Daten | Setlists duplizieren, Lied entfernen mit Rückgängig |
 | Daten | Persistenz als JSON via kotlinx.serialization, Einstellungen via DataStore |
+| Person | Eigener Name, zufällige Kennung, Titel „‹Name›s Noten“, Farbe pro Person |
+| Person | Notizen pro Person mit Verfasser, fremde einzeln einblendbar |
+| Sicherung | *Alles sichern* und *Setlist teilen* als ZIP, mit Prüfsummen |
+| Sicherung | *Sicherung einlesen* mit Vergleichsmaske und Schnellwahlen |
+| Sicherung | Erinnerung nach 30 Tagen, Urheberrechtshinweis – beide abschaltbar |
 | UI | Material 3, Navigationsmenü (Drawer) |
 | UI | Buchstabenleiste zum Springen in beiden Listen |
 | UI | Startbildschirm, nahtlos an den System-Splash anschließend |
@@ -77,6 +82,11 @@ entfernen – Entscheidung steht aus.
 
 **Eigene Kompositionen** (Abschnitt 5a) sind noch nicht ausgearbeitet.
 
+**Datensicherung und Austausch** (Abschnitt 5b): Stufe 1 ist umgesetzt (ZIP-Sicherung,
+Setlist teilen, Vergleichsmaske, Notizen pro Person). Noch offen ist die Vorschau der
+ersten Seite beider Fassungen in der Vergleichsmaske. Der automatische Abgleich mit
+Google Drive (Stufe 2) ist nur ein Entwurf.
+
 ---
 
 ## 2a. Veröffentlichung
@@ -106,6 +116,8 @@ veröffentlicht wurde.
 | 4 | 1.1.0 | Genre, Filter und Sortierung, Sprungleiste auf dem Telefon, Randblitz |
 | 5–10 | 1.1.1–1.1.6 | Setlist-Fortschritt, Zweisprachigkeit, Zoom pro Seite; 10 nicht hochgeladen |
 | 11 | 1.5.0 | Navigationsmenü, Einstellungen, Statusleiste, Design-Wahl, Startbildschirm |
+| 12 | 1.6.0 | Person, Notizen pro Person, Datei-Prüfsumme |
+| 13 | 1.6.1 | Datensicherung als ZIP, Vergleichsmaske, Setlist teilen, Hinweise |
 
 Die Nummer steht in `app/version.properties` und wird nach jedem erfolgreichen
 `:app:bundleRelease` automatisch erhöht. Die Datei gehört ins Repository, damit sich
@@ -420,7 +432,7 @@ data class Song(
     val totalBars: Int = 0,          // derzeit ungenutzt
     val lastPage: Int = 0,           // Altfeld, wird nur noch gelesen
     val pageViews: Map<Int, PageView> = emptyMap(),  // Zoom/Ausschnitt pro Seite
-    val notes: String = "",          // kurze Notiz neben den Noten ("Capo 2")
+    val notes: String = "",          // kurze Notiz neben den Noten ("Capo 2"); wird zu List<SongNote>, siehe 5b
     val lyrics: String = "",         // Liedtext/Akkorde, unabhängig von fileUri
     val lastOpenedAt: Long = 0,      // für Sortierung "Zuletzt"
 ) {
@@ -492,6 +504,588 @@ BISHER_PLATZHALTER
 
 ---
 
+## 5b. Datensicherung und Austausch
+
+Noten sind Arbeit: gescannt, zugeschnitten, benannt, gezoomt, zu Programmen
+zusammengestellt. Ein verlorenes oder zurückgesetztes Tablet darf das nicht mitnehmen.
+
+### Ausgangslage
+
+| Daten | Ort | Größe |
+|---|---|---|
+| Lieder | `files/songs.json` | klein |
+| Setlists | `files/setlists.json` | klein |
+| Einstellungen | DataStore `settings` | winzig |
+| PDFs | `files/songs/<id>.pdf` | groß, Scans oft 1–5 MB je Lied |
+| MusicXML | `files/musicxml/<id>.*` | mittel |
+
+### Grundsatz: Lied und Notendatei sind eine Einheit
+
+Ein Lied ohne seine Notendatei ist wertlos, eine Notendatei ohne ihr Lied ein namenloser
+Scan. Jede Sicherung erfasst beide **gemeinsam** oder gar nicht. Daraus folgt:
+
+*   **Die Android-Sicherung bleibt, wie sie ist.** Sie sichert alles in einem Stück oder
+    gar nichts: Über 25 MB entfällt sie ganz. Lieder ohne Noten kann sie also nicht
+    erzeugen. Verlässlich ist sie aber nur für kleine Sammlungen (siehe unten).
+*   **Keine halben Lieder.** *Alles sichern* nimmt die ganze Sammlung mit, *Setlist
+    teilen* genau eine Setlist samt allen ihren Liedern – aber nie ein Lied ohne
+    Datei oder eine Datei ohne Lied.
+*   **Auch das Einlesen behandelt Lied und Datei als Paar.** Ein
+    Lied wird nur übernommen, wenn seine Datei mitkommt und die Prüfsumme stimmt.
+
+| Stufe | Was | Internet | Wann |
+|---|---|---|---|
+| 1 | Sicherung und Austausch als ZIP: *Alles sichern*, *Setlist teilen*, Vergleichsmaske, Notizen pro Person | nein | umgesetzt (1.6.1) |
+| 2 | Automatischer Abgleich mit Google Drive | ja, optional | offen |
+
+Stufe 1 ist damit mehr als eine Sicherung: Mit Setlist-Datei, Vergleichsmaske und
+Notizen pro Person ist sie bereits **Zusammenarbeit ohne Internet**. Die Datei reist
+über Messenger, E-Mail oder einen geteilten Drive-Ordner, die App gleicht beim Einlesen
+ab.
+
+Stufe 2 automatisiert nur noch den Transport. Sie kommt später oder wird anders gelöst;
+die App bleibt bis dahin ohne Internet-Berechtigung. Was unten zu Stufe 2 steht, ist
+daher ein **Entwurf**, keine Festlegung.
+
+### Android-Sicherung: unverändert lassen
+
+Die Regeldateien bleiben Vorlage, die Android-Sicherung erfasst also weiterhin alles.
+Das passt zum Grundsatz, denn sie arbeitet mit Momentaufnahmen des ganzen
+App-Speichers: Lieder und Dateien stammen immer aus demselben Moment.
+
+| Sammlung | Verhalten |
+|---|---|
+| unter 25 MB | vollständig gesichert, etwa einmal nächtlich, ohne Zutun |
+| über 25 MB | keine neue Sicherung; die letzte erfolgreiche bleibt im Google-Konto liegen |
+| Umzug Gerät zu Gerät | ohne Größengrenze, alles wandert mit |
+
+Auf die Regeln die Notendateien auszuschließen, wäre der eigentliche Fehler: Dann
+bliebe die Sicherung zwar unter 25 MB, hätte aber Lieder ohne Noten.
+
+> [!NOTE]
+> Wurde die Grenze überschritten, kann Android auf einem neuen Gerät einen **alten, aber
+> stimmigen** Stand einspielen. Das schadet nicht: Die anschließend eingespielte
+> ZIP-Sicherung zeigt in der Vergleichsmaske, was sich seitdem geändert hat.
+
+Datenschutzerklärung und Store-Text bleiben gültig.
+
+### Person und Notizen
+
+Sobald Sammlungen zwischen Menschen wandern, muss eine Notiz sagen, von wem sie ist.
+
+#### Name und Kennung
+
+In den Einstellungen gibt es ein freies Feld *Dein Name*. Unabhängig davon erzeugt die
+App beim ersten Start eine unsichtbare, zufällige **Personen-Kennung**. Sie ist das
+eigentliche Unterscheidungsmerkmal; der Name ist nur Anzeige.
+
+| Fall | Anzeige | Unterscheidung |
+|---|---|---|
+| kein Name eingetragen | **Meine Noten** | Kennung |
+| Name geändert („Flo“ → „Florian“) | neuer Name, auch an alten Notizen | Kennung bleibt |
+| zwei Personen gleichen Namens | beide „Anna“, aber in verschiedenen Farben | Kennung |
+| „Anna S.“ und „Anna B.“ | wie eingetragen | Kennung |
+
+Der Name ist freier Text, Punkte, Leerzeichen und Kürzel sind erlaubt, nur `trim()` wird
+angewandt.
+
+**Farben.** Jede Person bekommt eine Farbe, **abgeleitet aus der Kennung**, nicht aus dem
+Namen – so haben zwei Annas sicher verschiedene Farben, und dieselbe Person hat auf allen
+Geräten dieselbe. Die Farben stammen aus einer festen Palette von etwa acht Tönen. Die
+Akzentfarbe der App bestimmt weiterhin das Gerät (dynamische Farben ab Android 12);
+die eigene Personenfarbe erscheint nur dort, wo andere die eigenen Notizen sehen.
+
+**Unterscheidung wählbar.** Wie Personen auseinandergehalten werden, legt man in den
+Einstellungen unter *Notizen anderer* fest. Die drei Schalter sind unabhängig und
+frei kombinierbar:
+
+| Einstellung | Wirkung | Standard |
+|---|---|---|
+| **Farbpunkt** | farbiger Punkt vor dem Namen | aus |
+| **Name farbig** | der Name selbst in der Farbe der Person | an |
+| **Nummer bei gleichen Namen** | „Anna · 1“, „Anna · 2“, nur wenn ein Name mehrfach vorkommt | aus |
+
+Sind alle drei aus, sehen zwei Annas gleich aus – das ist dann eine bewusste Wahl,
+etwa wenn man sie ohnehin als „Anna S.“ und „Anna B.“ eingetragen hat. Intern bleiben
+sie über die Kennung getrennt.
+
+Die Nummer richtet sich nach der Reihenfolge, in der die Personen zum ersten Mal auf
+dem Gerät aufgetaucht sind, und bleibt danach fest. Sonst hätte dieselbe Anna je nach
+Lied mal die 1, mal die 2.
+
+> [!NOTE]
+> Farbiger Text muss auf jedem Hintergrund lesbar sein. Die Palette hat deshalb je Ton
+> eine helle und eine dunkle Variante mit ausreichendem Kontrast (mindestens 4,5 : 1
+> nach WCAG) für das jeweilige Design; der Farbpunkt nutzt denselben Ton. Bei
+> Farbfehlsichtigkeit unterscheiden Farben allein nicht sicher – dafür ist die Nummer
+> gedacht.
+
+**Startbildschirm und Titel.** Ist ein Name eingetragen, steht dort, wo heute *Meine
+Noten* steht, **„‹Name›s Noten“** – im Startbildschirm und oben in der Songliste. Der
+App-Name unter dem Symbol auf dem Homescreen bleibt *Meine Noten*; ihn kann eine App
+nicht zur Laufzeit ändern. Im Englischen „‹Name›'s Sheets“. Die deutsche
+Genitivregel wird beachtet: „Annas Noten“, aber „Hans’ Noten“ und „Max’ Noten“ bei
+Namen auf *s*, *x*, *z*. Bei einem sehr langen Namen fällt die Anzeige auf *Meine
+Noten* zurück, statt abgeschnitten zu werden.
+
+#### Mehrere Notizen pro Lied
+
+`Song.notes` wird von einem Text zu einer Liste von Notizen mit Verfasser:
+
+```kotlin
+@Serializable
+data class SongNote(
+    val authorId: String,      // Personen-Kennung, fest
+    val authorName: String,    // Name beim letzten Bearbeiten, nur Anzeige
+    val text: String,
+    val editedAt: Long = 0,    // letzte Bearbeitung, entscheidet zwischen zwei Fassungen derselben Person
+)
+```
+
+*   Jede Person hat pro Lied **höchstens eine** Notiz. Die eigene ist bearbeitbar wie
+    heute.
+*   Fremde Notizen lassen sich lesen, ausblenden und löschen, aber **nicht bearbeiten**
+    – sonst stünde ein fremder Name unter dem eigenen Text.
+*   Kommt beim Einlesen eine Notiz derselben Person in neuerer Fassung (`editedAt`),
+    ersetzt sie die alte; das ist die einzige Stelle, an der ohne Nachfrage
+    überschrieben wird, weil Verfasser und Reihenfolge eindeutig sind. Eine *ältere*
+    Fassung wird ignoriert.
+*   In der Notenansicht steht die eigene Notiz wie heute. Fremde sind standardmäßig
+    **ausgeblendet** und pro Person einschaltbar – beim Spielen stören fünf Notizen mehr,
+    als sie helfen.
+
+**Übergang.** Beim ersten Start der neuen Version wird eine vorhandene Notiz zur eigenen
+(`authorId` = eigene Kennung). Die JSON-Datei liest das alte Textfeld weiterhin, damit
+auch ältere Sicherungen einlesbar bleiben.
+
+Dasselbe Verfahren lässt sich später auf Setlist-Notizen übertragen; für den Anfang
+bleiben diese ein einzelner Text.
+
+### Stufe 1: Sicherung und Austausch als ZIP
+
+Ein Knopf, eine Datei. In den Einstellungen unter *Datensicherung*:
+
+*   **Alles sichern** – die vollständige Sammlung samt Einstellungen.
+*   **Setlist teilen** – im Menü einer Setlist: die Setlist, ihre Lieder und deren
+    Notendateien, ohne Einstellungen (siehe *Setlist-Datei*).
+*   **Sicherung einlesen** – eine solche Datei auswählen, egal welcher Art.
+*   Darunter: „Letzte Sicherung: vor 12 Tagen“.
+
+Beim Sichern öffnet sich die Dateiauswahl des Systems (`ACTION_CREATE_DOCUMENT`). Ziel
+kann der Download-Ordner, ein USB-Stick oder Google Drive sein – die Drive-App tritt in
+der Auswahl als Speicherort auf und lädt selbst hoch. Der Weg braucht **keine
+Berechtigung** und kein Internet: Die App schreibt nur in die eine Datei, die man ihr
+gerade gegeben hat.
+
+#### Dateiname
+
+Vorgeschlagen wird `JJJJMMTT_[Art]_[Gerät]_[Name].zip`:
+
+```text
+20261004_Komplett_Florians-Tablet_Florian.zip
+20261004_Setlist-Erntedank_Pixel-8_Anna-S.zip
+20261004_Komplett_Galaxy-Tab-S9_Meine-Noten.zip
+```
+
+| Teil | Quelle |
+|---|---|
+| Datum | Tag der Sicherung, sortiert sich im Ordner von selbst |
+| Art | `Komplett` oder `Setlist-<Titel>` |
+| Gerät | selbst vergebener Gerätename, sonst das Modell |
+| Name | eingetragener Name (Abschnitt *Person*), sonst `Meine-Noten` |
+
+Leerzeichen werden zu `-`, Zeichen, die Dateisysteme nicht vertragen (`/ \ : * ? " < > |`),
+entfallen; Umlaute bleiben. Der Name ist nur ein Vorschlag und darf umbenannt werden –
+maßgeblich sind deshalb die Angaben im `manifest.json`, nicht der Dateiname.
+
+Während der Sicherung zeigt ein Fortschrittsdialog „Lied 34 von 87“. Sie läuft im
+Hintergrund weiter, wenn man den Bildschirm verlässt; währenddessen sind Import und
+Löschen gesperrt, damit Lieder und Dateien in der Sicherung zueinander passen.
+
+#### Was enthalten ist
+
+| Bereich | Inhalt |
+|---|---|
+| Lieder | alle Felder: Titel, Künstler, Version, Genre, alle Notizen mit Verfasser, Liedtext, Zoom und Ausschnitt pro Seite (`pageViews`), Datei-Prüfsumme, zuletzt geöffnet |
+| Notendateien | jede PDF- und MusicXML-Datei, die zu einem Lied gehört |
+| Setlists | Reihenfolge, Datum, Notiz, Fortschritt (`lastSongId`, `lastPage`), zuletzt gespielt |
+| Einstellungen | sämtliche Werte aus `AppSettings`: Statusleiste, Tippzonen, Randblitz, Pedaltasten, Bildschirm an, Zoom merken, Design, Name |
+
+Nicht enthalten ist nur, was sich neu ergibt: zwischengespeicherte Seitenbilder und
+temporäre Dateien.
+
+> [!IMPORTANT]
+> Neue Felder und Einstellungen müssen **automatisch** mitgesichert werden, sonst geht
+> später still etwas verloren. Deshalb werden `Song` und `Setlist` über ihre
+> vorhandene Serialisierung geschrieben, und `AppSettings` bekommt eine eigene
+> serialisierbare Form mit Standardwerten. Ein Unit-Test prüft, dass eine Sicherung nach
+> dem Wiederherstellen dieselben Daten ergibt (Hin- und Rückweg).
+
+#### Aufbau der Datei
+
+Ein gewöhnliches ZIP, damit es sich im Notfall auch am Rechner öffnen lässt:
+
+```text
+20261004_Komplett_Florians-Tablet_Florian.zip
+├── manifest.json      Format-Version, App-Version, Art, Zeitpunkt, Gerät, Person
+│                      (Kennung und Name), Dateiliste mit Prüfsummen
+├── songs.json
+├── setlists.json
+├── settings.json      nur bei „Komplett“; lesbares JSON, nicht die DataStore-Datei
+└── files/
+    ├── <id>.pdf
+    └── <id>.musicxml
+```
+
+In der Sicherung stehen **relative** Dateinamen (`files/<id>.pdf`), nicht die heutigen
+`file://`-Pfade. Diese enthalten den Speicherort des Geräts und wären auf einem anderen
+Gerät oder für einen zweiten Nutzer falsch. Beim Wiederherstellen wird `fileUri` neu
+gebildet.
+
+Vor dem Schreiben wird geprüft, dass jedes Lied (außer reinen Textliedern) seine Datei
+hat. Fehlt eine, nennt die App das betroffene Lied und fragt, ob ohne es gesichert
+werden soll – eine Sicherung, die still ein Lied ohne Noten enthält, wäre die
+schlechtere Wahl.
+
+PDFs werden im ZIP nur **gespeichert**, nicht komprimiert: Sie sind es schon, ein zweiter
+Durchgang kostet Zeit und bringt nichts. Geschrieben wird als Datenstrom, damit auch
+eine Sammlung von mehreren hundert Megabyte nicht in den Arbeitsspeicher muss.
+
+#### Einlesen: die Vergleichsmaske
+
+Eine Sicherung wird nie blind eingespielt. Die App liest sie zuerst in einen
+Zwischenordner, prüft die Prüfsummen und zeigt dann eine **vollständige Liste** aller
+Lieder und Setlists aus der Datei – gruppiert danach, wie sie zum eigenen Bestand
+passen. Oben stehen Herkunft und Umfang („Komplett · Florians Tablet · Florian ·
+04.10.2026 – 87 Lieder, 14 Setlists“) und die Zähler je Gruppe.
+
+Zugeordnet wird in dieser Reihenfolge, der erste Treffer gilt:
+
+| Gruppe | Erkannt an | Vorauswahl |
+|---|---|---|
+| **Identisch** | gleicher Datei-Hash, alle Angaben gleich | überspringen, ist schon da |
+| **Gleiche Noten, andere Angaben** | gleicher Datei-Hash, aber z. B. anderer Titel, anderes Genre, neue Notizen – auch bei anderer Kennung, also *anders abgelegt* | meins behalten, fremde Notizen anbieten |
+| **Mögliche andere Fassung** | gleicher Titel und Künstler, anderer Datei-Hash | fragen |
+| **Neu** | nichts davon | importieren |
+
+Bei den beiden mittleren Gruppen zeigt die Maske die **Unterschiede Feld für Feld**
+(„Titel: *Großer Gott* ↔ *Großer Gott, wir loben dich*“) und die erste Seite beider
+Fassungen als Vorschaubild nebeneinander, dazu Seitenzahl und Dateigröße. Ob zwei
+Scans dieselben Noten sind, sieht man am Bild sofort, am Titel nicht. Pro Lied:
+
+*   **Meins behalten** – nur die ausgewählten fremden Notizen kommen hinzu.
+*   **Aus der Sicherung übernehmen** – Angaben *und* Datei, nie nur eines von beiden.
+*   **Beide behalten** – das eingelesene Lied bekommt eine neue Kennung, *Version* wird
+    vorbelegt („aus Sicherung Anna S.“), damit die beiden in der Liste unterscheidbar
+    sind.
+
+> [!NOTE]
+> Ein Datei-Hash beweist **Gleichheit**, aber nicht Verschiedenheit: Derselbe Scan kann
+> nach erneutem Speichern oder Komprimieren andere Bytes haben. Deshalb entscheidet die
+> App bei verschiedenem Hash nie selbst, sondern zeigt die Vorschau.
+
+Den **Zoom pro Seite** übernimmt die App nur bei neuen Liedern oder bei ausdrücklichem
+„Aus der Sicherung übernehmen“. Er ist persönlich; das eigene Lied behält seinen.
+
+Schnellwahlen oben: *Alles wie vorgeschlagen*, *Nur Neue*, *Alles ersetzen*. Wer die
+eigene Sicherung zurückholt, tippt einmal und ist fertig. *Alles ersetzen* löscht
+vorher den Bestand auf dem Gerät und verlangt eine Bestätigung.
+
+**Setlists** verweisen auf Lied-Kennungen der Sicherung. Wird ein Lied als *identisch*
+übersprungen oder *meins behalten*, wird der Verweis auf das **eigene** Lied umgebogen –
+die Setlist bleibt vollständig, ohne Dublette. Wählt man ein Lied ab, das eine
+ausgewählte Setlist braucht, weist die Maske darauf hin („Setlist *Erntedank* enthält
+dieses Lied“).
+
+**Einstellungen** stehen als eigene Zeile in der Liste, bei *Komplett* abgewählt außer
+bei *Alles ersetzen* – auf einem zweiten Gerät mit anderer Pedalbelegung wäre ein
+stilles Überschreiben lästig. Der eingetragene Name wird nie übernommen; er gehört zum
+Gerät, nicht zur Sammlung.
+
+Übernommen wird erst nach *Einlesen* und dann in einem Schritt. Eine abgebrochene
+Wiederherstellung hinterlässt keinen halben Bestand.
+
+#### Setlist-Datei
+
+*Setlist teilen* erzeugt eine Datei mit genau einer Setlist, ihren Liedern und deren
+Notendateien – Lied und Datei bleiben auch hier ein Paar. Einstellungen sind nicht
+enthalten.
+
+Beim Einlesen zeigt die Maske dieselben Gruppen, zugeschnitten auf die Frage „Habe ich
+alles für Sonntag?“:
+
+| Zeichen | Bedeutung | Wirkung |
+|---|---|---|
+| ✓ | vorhanden | Setlist verweist auf das eigene Lied |
+| ≈ | vorhanden, anders abgelegt | Setlist verweist auf das eigene Lied, Unterschiede sichtbar |
+| ? | mögliche andere Fassung | Wahl wie oben |
+| + | fehlt | wird importiert |
+
+Damit ist ein Großteil der Zusammenarbeit im Chor **ohne Internet** erledigt: Die
+Chorleitung verschickt die Setlist-Datei per Messenger, jedes Mitglied liest sie ein
+und bekommt nur, was fehlt – plus ihre Notizen.
+
+> [!WARNING]
+> Gekaufte Noten dürfen meist nicht weitergegeben werden. *Setlist teilen* zeigt vor dem
+> Erstellen einen Hinweis darauf. Er lässt sich per Checkbox *Nicht wieder anzeigen*
+> abstellen und unter *Einstellungen → Hinweise* wieder einschalten. Die Verantwortung
+> liegt beim Nutzer; die App prüft das nicht und kann es nicht.
+
+#### Erinnerung
+
+Ohne Automatik wird Sicherung vergessen. Ist die letzte Sicherung älter als 30 Tage,
+erscheint in der Songliste ein dezenter Hinweis mit *Später* und *Jetzt sichern*.
+Die Checkbox *Nicht wieder anzeigen* schaltet ihn dauerhaft ab (wieder einschaltbar
+unter *Einstellungen → Hinweise*). **Nie** in der Notenansicht – dort stört jede
+Meldung.
+
+> [!NOTE]
+> „Nicht wieder anzeigen“ ist in beiden Fällen eine **Checkbox**, kein eigener Knopf:
+> Sie ergänzt die Entscheidung, statt selbst eine zu sein. Beide Knöpfe werten sie aus.
+
+#### Aufbau der Vergleichsmaske
+
+Info-Karte, Schnellwahl und *Jetzt importieren* stehen **fest oben**; nur die Liste der
+Lieder, Setlists und Einstellungen darunter scrollt. So ist der eine Import-Knopf
+immer erreichbar, ein zweiter am Listenende entfällt.
+
+Die Dateiauswahl zum Speichern und Öffnen gehört zu Android, nicht zur App. Sie hat
+keinen Zurück-Pfeil der App; abgebrochen wird mit der Zurück-Geste des Systems. Eine
+eigene Dateiauswahl würde Speicher-Berechtigungen und den Verzicht auf Drive und
+USB-Stick kosten und ist deshalb nicht vorgesehen.
+
+### Stufe 2 (Entwurf): Automatischer Abgleich mit Google Drive
+
+> [!NOTE]
+> Noch nicht eingeplant. Stufe 1 deckt Sicherung und Austausch ab; Stufe 2 würde nur
+> den Knopfdruck ersparen. Ob sie so kommt, später anders gelöst wird oder entfällt,
+> entscheidet sich erst, wenn Stufe 1 im Alltag erprobt ist. Der folgende Entwurf hält
+> fest, was dabei zu beachten wäre.
+
+Ein Schalter *Automatisch in Google Drive sichern*. Erst beim Einschalten meldet man
+sich an; wer ihn nie berührt, merkt von der Internetanbindung nichts.
+
+#### Anmeldung und Speicherort
+
+*   Anmeldung über den `AuthorizationClient` der Google Play-Dienste.
+*   Berechtigungsumfang **`drive.appdata`**: ein versteckter, app-eigener Ordner im Drive
+    des Nutzers. Die App sieht keine anderen Dateien, und Google stuft den Umfang als
+    *nicht sensibel* ein – keine Sicherheitsprüfung der App durch Google nötig.
+*   Der Ordner zählt zum Speicherkontingent des Nutzers. Er ist nur über die App
+    erreichbar; zum Mitnehmen an den Rechner dient Stufe 1.
+
+> [!NOTE]
+> Für die Zusammenarbeit reicht `drive.appdata` nicht, weil der Ordner nicht geteilt
+> werden kann. Das ist gewollt: Sicherung und Zusammenarbeit bekommen getrennte
+> Freigaben, damit wer nur sichern will, nicht mehr erlaubt als nötig.
+
+#### Nur Änderungen übertragen
+
+Jede Datei wird einzeln abgelegt, nicht als ZIP – sonst müsste bei jeder Änderung
+die ganze Sammlung hoch. Ein **Stand-Verzeichnis** (`index.json`) hält pro Datei die
+Prüfsumme fest.
+
+| Ereignis | Übertragen |
+|---|---|
+| Lied importiert | eine Notendatei + `songs.json` |
+| Titel geändert, Zoom verschoben | nur `songs.json` |
+| Setlist umgestellt | nur `setlists.json` |
+| Lied gelöscht | Notendatei wird in Drive **nicht sofort** gelöscht (siehe unten) |
+
+Bei jedem Lauf vergleicht die App die Prüfsummen mit dem letzten erfolgreich
+übertragenen Stand und lädt nur, was abweicht. Die Notendateien ändern sich fast nie;
+nach der Erstsicherung sind Läufe typischerweise wenige Kilobyte.
+
+Auch hier bleiben Lied und Datei ein Paar: Zuerst werden die Notendateien übertragen,
+erst danach `songs.json`. Bricht ein Lauf ab, kennt der Stand in Drive also nie ein Lied,
+dessen Datei fehlt.
+
+#### Wann gesichert wird
+
+Geplant über **WorkManager** mit den Bedingungen *WLAN* (`UNMETERED`) und *Akku nicht
+fast leer*:
+
+*   **bei geöffneter App**: etwa eine Minute nach der letzten Änderung, damit eine Reihe
+    von Bearbeitungen einen einzigen Lauf ergibt;
+*   **zusätzlich täglich** als Absicherung, falls die App vorher geschlossen wurde.
+
+Ein Lauf wird **nie während der Notenansicht** gestartet und läuft dort bei Bedarf
+pausiert weiter, damit die Seitenwechsel nicht mit einem Upload um Leistung
+konkurrieren.
+
+Im Einstellungsbereich steht der Zustand: „Gesichert vor 3 Minuten“, „Wartet auf
+WLAN“, „Fehler: Anmeldung abgelaufen“. Ein Fehler, der länger als eine Woche besteht,
+wird wie die Erinnerung aus Stufe 1 in der Songliste gemeldet.
+
+#### Gelöschtes aufbewahren
+
+Eine automatische Sicherung, die jedes Löschen sofort nachvollzieht, sichert auch
+jeden Fehler. Gelöschte Lieder bleiben deshalb **30 Tage** in Drive erhalten und lassen
+sich in dieser Zeit wiederherstellen; erst dann wird ihre Datei entfernt.
+
+Von `songs.json` und `setlists.json` werden zusätzlich die letzten sieben Tagesstände
+behalten – sie sind klein, und eine versehentlich geleerte Setlist lässt sich so
+zurückholen.
+
+#### Wiederherstellen
+
+Auf einem neuen Gerät: App installieren, Schalter einschalten, anmelden. Die App
+erkennt einen vorhandenen Stand und fragt, ob er übernommen werden soll. Dann gilt
+dasselbe wie bei Stufe 1 (Vergleichsmaske, erst Zwischenordner).
+
+#### Folgen der Internetanbindung
+
+> [!WARNING]
+> Mit Stufe 2 fordert die App die Berechtigung `INTERNET` an und nutzt die Google
+> Play-Dienste. Das ändert Aussagen, die heute öffentlich gemacht werden:
+>
+> *   **Datenschutzerklärung**: Abschnitte „Keine Netzwerkverbindung“, „Berechtigungen“,
+>     „Drittanbieter-Dienste“ neu fassen – Daten gehen nur in das Drive des Nutzers,
+>     nie an den Entwickler.
+> *   **Datensicherheit in der Play Console**: Übertragung an Google Drive auf Wunsch
+>     des Nutzers angeben.
+> *   **Store-Text**: „Vollständig offline“ wird zu „offline nutzbar, Sicherung in
+>     Google Drive optional“.
+
+Die Berechtigung `INTERNET` ist eine Installationsberechtigung und lässt sich nicht
+erst beim Einschalten anfordern. Zu halten ist trotzdem: **Ohne eingeschalteten Schalter
+verlässt kein Byte das Gerät.** Die WebView für MusicXML bleibt mit
+`blockNetworkLoads` abgeschottet.
+
+Soll die Grundversion ganz ohne `INTERNET` bleiben, geht das nur über zwei
+Produktvarianten (Gradle-Flavors). Das verdoppelt die Prüfarbeit vor jedem Release und
+wird deshalb nicht angestrebt.
+
+### Ausblick: Zusammenarbeit
+
+Im Kirchenchor gibt es wiederkehrende Fragen, die eine Sicherung schon halb beantwortet:
+„Welche Lieder am Sonntag?“, „Schick mir die Noten“. Die Idee ist ein **geteilter Ordner**
+in Google Drive, in den die Chorleitung eine Setlist mit ihren Noten legt und aus dem
+die anderen sie übernehmen.
+
+Was Stufe 1 und 2 dafür schon vorbereiten sollten:
+
+*   **Relative Dateinamen und stabile Kennungen** – ein Lied muss sich auf fremden
+    Geräten wiedererkennen lassen.
+*   **Datei-Hash und Vergleichsmaske** – eine geteilte Setlist darf die eigene Sammlung
+    nicht überschreiben.
+*   **Personen-Kennung und Notizen mit Verfasser** – bereits in Stufe 1 enthalten.
+*   **Änderungszeitpunkt pro Lied und Setlist** (`updatedAt`) – erst hier nötig: Gleichen
+    mehrere Geräte laufend ab, muss ohne Maske entschieden werden können, was neuer ist.
+*   **Getrennte Freigabe** – Zusammenarbeit fordert `drive.file` für einen
+    ausgewählten Ordner an, zusätzlich und nur dann, wenn man sie nutzt.
+
+Noch nicht entschieden, und für diese Stufe auch nicht nötig: ob geteilte Setlists
+nur gelesen oder von allen bearbeitet werden. Urheberrecht an gekauften Noten gilt wie
+bei der Setlist-Datei.
+
+### Neue Datenfelder
+
+```kotlin
+data class Song(
+    // …
+    val notes: List<SongNote> = emptyList(),  // statt String, siehe „Person und Notizen“
+    val fileHash: String = "",               // SHA-256 der Notendatei, leer = noch nicht berechnet
+)
+
+data class AppSettings(
+    // …
+    val userName: String = "",   // leer = „Meine Noten“
+    val userId: String,          // beim ersten Start erzeugt, nie geändert
+    val lastBackupAt: Long = 0,  // für die Erinnerung
+    val noteAuthorDot: Boolean = false,        // Farbpunkt vor dem Namen
+    val noteAuthorColoredName: Boolean = true, // Name in der Farbe der Person
+    val noteAuthorNumber: Boolean = false,     // „Anna · 1“ bei gleichen Namen
+    val showBackupReminder: Boolean = true,    // Erinnerung nach 30 Tagen
+    val showCopyrightWarning: Boolean = true,  // Hinweis vor „Setlist teilen“
+)
+```
+
+`fileHash` wird beim Import und beim Austausch der Datei gesetzt; bestehende Lieder
+bekommen ihn beim ersten Sichern nachgetragen, damit das Einlesen großer Sammlungen
+nicht jedes Mal alle Dateien neu durchrechnen muss. Er erlaubt später auch einen
+Hinweis beim normalen Import („Diese PDF ist schon als *Großer Gott* vorhanden“) und
+bildet in Stufe 2 die Grundlage für „nur Änderungen übertragen“.
+
+`userId` sichert die App nicht mit in die Einstellungen der Sicherung zurück, sondern
+nur ins Manifest: Wer eine eigene Komplettsicherung auf einem neuen Gerät einliest, wird
+gefragt, ob er *diese Person* ist – dann übernimmt das neue Gerät Kennung und Name, und
+die eigenen Notizen bleiben eigene.
+
+Erst mit Stufe 2 kommt `updatedAt` an `Song` und `Setlist` hinzu (Standardwert `0` =
+unbekannt). Nicht als Änderung zählen dann `lastOpenedAt`, `lastPlayedAt` und der
+Fortschritt – sonst würde jedes Öffnen eines Liedes eine neue Version erzeugen.
+
+### Umsetzungsreihenfolge
+
+> [!NOTE]
+> **Arbeitsstand** – wird während der Umsetzung gepflegt, damit nach einer Unterbrechung
+> gleich weitergearbeitet werden kann. `[ ]` offen · `[/]` in Arbeit · `[x]` umgesetzt.
+
+1.  `[x]` Person: Name, Kennung, Farben, „‹Name›s Noten“.
+    *   `[x]` `userName`, `userId`, `lastBackupAt`, `noteAuthor*` in `AppSettings`;
+        Kennung per `SettingsRepository.ensureUserId()` beim Start erzeugt
+    *   `[x]` Feld *Dein Name* in den Einstellungen (Abschnitt *Person*)
+    *   `[x]` Titel „‹Name›s Noten“ (Genitivregel, Rückfall ab 21 Zeichen) in
+        Startbildschirm und Menü (`PersonUtils.kt`, `AppTitle.kt`, `PersonTitleTest`).
+        Die Songliste zeigt oben „Lieder (n)“, nicht den App-Namen – dort entfällt es.
+    *   `[x]` Farbpalette pro Kennung (8 Töne, hell/dunkel), Schalter *Notizen anderer*.
+        Die Schalter wirken erst mit Schritt 2.
+    *   `[x]` Akzentfarbe: entschieden – das Gerät bestimmt sie (dynamische Farben),
+        die Personenfarbe wird nicht als Akzent genutzt
+2.  `[x]` Notizen als Liste mit Verfasser, samt Übergang der bisherigen Notiz.
+    *   `[x]` `SongNote` (`model/SongNote.kt`), `Song.notes` als Liste (JSON-Feld
+        `songNotes`); das alte Textfeld `notes` wird als `legacyNotes` weiter gelesen
+    *   `[x]` Übergang: alte Notiz wird zur eigenen, sobald die Kennung da ist
+        (`Song.migrateLegacyNote`, ausgelöst in `MainApp`)
+    *   `[x]` Bearbeiten-Dialog: eigene Notiz bearbeitbar, fremde lesen und löschen;
+        unveränderter Text behält seinen Zeitstempel
+    *   `[x]` Notenansicht: eigene Notiz sichtbar, fremde pro Person einschaltbar
+        (Schalter, bleibt für die Sitzung erhalten)
+    *   `[x]` Verfasseranzeige mit Punkt / farbigem Namen / Nummer (`NoteAuthorLabel`,
+        `authorNumbers`); Zusammenführen je Verfasser (`mergedWith`) für Schritt 4
+    *   `[x]` Unit-Tests `SongNoteTest` (53 Tests gesamt, alle grün)
+3.  `[x]` `fileHash` beim Import setzen und nachtragen.
+    *   `[x]` `Song.fileHash` (SHA-256, hex), `FileHash` streamt die Datei
+    *   `[x]` gesetzt bei Import und *Ersetzen*, geleert bei *Entfernen*
+    *   `[x]` beim Start im Hintergrund nachgetragen (`computeMissingHashes`),
+        Liste wird nach Kennung zusammengeführt; `FileHashTest` (55 Tests grün)
+    *   Nebenbei behoben: Beim Ersetzen durch eine Datei mit gleicher Endung wurde
+        die frisch kopierte Datei wieder gelöscht (gleicher Pfad).
+4.  `[x]` Stufe 1: *Alles sichern*, *Setlist teilen*, Vergleichsmaske, Erinnerung. Mit
+    Unit-Tests für Hin- und Rückweg, die Einteilung in Gruppen und das Umbiegen der
+    Setlist-Verweise.
+    *   `[x]` Serialisierbare Form von `AppSettings` (`SerializableAppSettings`,
+        `toSerializable()` / `toAppSettings()`; `userId` und `lastBackupAt` bleiben lokal)
+    *   `[x]` ZIP schreiben: *Alles sichern* (`BackupRepository.createFullBackupZip`:
+        Manifest, relative Pfade, Prüfsummen, PDFs nur gespeichert, Dateiname)
+    *   `[x]` Fortschrittsdialog „Lied 34 von 87: ‹Titel›“; Import und Löschen sind
+        währenddessen gesperrt
+    *   `[x]` *Setlist teilen* samt Urheberrechtshinweis (`CopyrightDialog`, Menü in
+        Setlist-Liste und -Ansicht)
+    *   `[x]` Einlesen in Zwischenordner, Prüfsummen prüfen
+    *   `[x]` Einteilung in Gruppen, Umbiegen der Setlist-Verweise – als reine
+        Funktionen ohne `Context` in `BackupLogic`
+    *   `[x]` Vergleichsmaske mit Schnellwahlen, Übernahme in einem Schritt
+        (`BackupCompareScreen`); Kopfbereich mit Import-Knopf fest, Liste scrollt
+    *   `[x]` Erinnerung in der Songliste (älter als 30 Tage)
+    *   `[x]` Abschnitt *Hinweise* in den Einstellungen: Erinnerung und
+        Urheberrechtshinweis abschaltbar; „Nicht wieder anzeigen“ als Checkbox
+    *   `[x]` Unit-Tests: Dateiname, Hin-/Rückweg der Einstellungen
+        (`BackupRepositoryTest`), Gruppeneinteilung und Setlist-Verweise
+        (`BackupLogicTest`) – 60 Tests grün
+    *   `[ ]` Vorschaubild der ersten Seite beider Fassungen in der Vergleichsmaske
+    *   `[ ]` Frage „Bist du diese Person?“ beim Einlesen einer eigenen
+        Komplettsicherung auf einem neuen Gerät (Kennung übernehmen)
+    *   `[ ]` Hinweis, wenn ein abgewähltes Lied von einer ausgewählten Setlist
+        gebraucht wird
+5.  Stufe 2 erst, wenn Stufe 1 im Alltag erprobt ist – sie nutzt dasselbe Format und
+    dieselbe Zuordnung, nur mit anderem Transport.
+
+Die Android-Sicherung wird dabei nicht angefasst.
+
+---
+
 ## 6. Technische Entscheidungen
 
 ### PDF-Darstellung
@@ -545,6 +1139,9 @@ liegt ein Compose-Startbildschirm, der die Note in exakt gleicher Größe und La
 der Wechsel ist unsichtbar, danach blenden Name und Version ein. Er erscheint nur beim
 Kaltstart (nicht beim Drehen oder nach der Dateiauswahl), verschwindet nach 1,2 s und
 lässt sich mit einem Tipp überspringen.
+
+Geplant: Ist in den Einstellungen ein Name eingetragen, zeigt der Startbildschirm
+„‹Name›s Noten“ statt *Meine Noten* (Abschnitt 5b, *Person und Notizen*).
 
 ### Sprachen
 
@@ -607,10 +1204,15 @@ app/src/main/
     ├── MainActivity.kt            Splash, Design, Startbildschirm
     ├── data/
     │   ├── SongRepository.kt      Import, JSON-Persistenz, Löschen
-    │   └── AppSettings.kt         Einstellungen, DataStore
+    │   ├── AppSettings.kt         Einstellungen, DataStore, serialisierbare Form
+    │   ├── BackupRepository.kt    ZIP schreiben und einlesen, Übernahme
+    │   ├── BackupLogic.kt         Dateiname, Gruppen, Setlist-Verweise (ohne Context)
+    │   └── FileHash.kt            SHA-256 einer Datei
     ├── model/
     │   ├── Song.kt
+    │   ├── SongNote.kt            Notiz mit Verfasser
     │   ├── Setlist.kt
+    │   ├── BackupModels.kt        Manifest, Vergleichs- und Importdaten
     │   └── PageView.kt            Zoom und Ausschnitt einer Seite
     └── ui/
         ├── MainApp.kt             Navigation, Drawer, Dialoge
@@ -627,16 +1229,20 @@ app/src/main/
         │   ├── VersionFooter.kt   Versionszeile
         │   ├── SetlistStrip.kt    ungenutzt, kann entfernt werden
         │   ├── GenreChips.kt      Vorschläge vergebener Genres
+        │   ├── NoteAuthor.kt      Verfasserzeile einer Notiz (Punkt, Farbe, Nummer)
+        │   ├── CopyrightDialog.kt Hinweis vor „Setlist teilen“
         │   └── DateField.kt       Datumsauswahl
         ├── util/
         │   ├── SortUtils.kt       Collator-Sortierung, Sortiermodi Songs
         │   ├── SetlistUtils.kt    Suche, Zeitraum, Sortierung Setlists
+        │   ├── PersonUtils.kt     Titel „‹Name›s Noten“, Personenfarbe
         │   └── DateUtils.kt       Datum deuten und anzeigen
         └── screens/
             ├── LaunchScreen.kt
             ├── SongListScreen.kt
             ├── SongDetailScreen.kt    Anzeige + Eingabekonzept
             ├── SetlistScreen.kt       Übersicht und Setlist-Detail
+            ├── BackupCompareScreen.kt Vergleichsmaske beim Einlesen
             └── SettingsScreen.kt
 ```
 
@@ -648,19 +1254,21 @@ app/src/main/
 
 ## 8. Prüfstand
 
-Stand 1.5.0 (`versionCode` 11):
+Stand 1.6.1 (`versionCode` 13):
 
 | Was | Wie geprüft | Ergebnis |
 |---|---|---|
-| Unit-Tests | `:app:testDebugUnitTest` | 38 bestanden, 0 fehlgeschlagen |
-| Release-Bundle | `:app:bundleRelease` | erfolgreich, 5,6 MB |
-| Signatur | `jarsigner -verify` | „JAR verifiziert“ |
-| Versionszähler | `version.properties` | nach dem Build auf 12 / 1.5.1 erhöht |
+| Unit-Tests | `:app:testDebugUnitTest` | 60 bestanden, 0 fehlgeschlagen |
+| Release-Bundle | `:app:bundleRelease` | erfolgreich |
+| Versionszähler | `version.properties` | nach dem Build auf 14 / 1.6.2 erhöht |
 
 Die Unit-Tests decken reine Logik ab: Gruppierung und Sortierung der Songliste
 (`SongListGroupingTest`), Suche, Zeitraum und Sortierung der Setlists
-(`SetlistListTest`) sowie Zoom-Daten und Rückwärtskompatibilität alter JSON-Dateien
-(`SongZoomAndBackwardCompatibilityTest`). Ohne Tests sind die Dateityp-Erkennung im
+(`SetlistListTest`), Zoom-Daten und Rückwärtskompatibilität alter JSON-Dateien
+(`SongZoomAndBackwardCompatibilityTest`), Notizen pro Person und Titel
+(`SongNoteTest`, `PersonTitleTest`), Prüfsumme (`FileHashTest`) sowie Dateiname,
+Einstellungen, Gruppeneinteilung und Setlist-Verweise der Sicherung
+(`BackupRepositoryTest`, `BackupLogicTest`). Ohne Tests sind die Dateityp-Erkennung im
 Repository und das Entpacken von `.mxl`.
 
 ### Prüfung eines Release-Builds
@@ -676,6 +1284,7 @@ R8-Fehler treten nur im Release-Build auf. Vor jedem Upload deshalb:
 | JS-Brücke behalten | `seeds.txt` | `onStatus(String, String)` enthalten |
 | Start | Release-APK auf Gerät | läuft, keine `ClassNotFound` |
 | **Lesen von JSON** | Lied anlegen, App neu starten | Lied weiterhin vorhanden |
+| Sicherung | Alles sichern, App-Daten löschen, Sicherung einlesen | alle Lieder, Noten, Setlists zurück |
 | Update | über die Vorversion installieren | bestehende Daten lesbar |
 
 Der Lese-Test ist der wichtigste: Er belegt, dass die Keep-Rules greifen und bestehende
