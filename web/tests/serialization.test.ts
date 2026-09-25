@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { songFromJson, songToJson, migrateLegacyNote, sha256Hex } from '../src/lib/logic/serialization';
 import { analyzeBackupFile } from '../src/lib/logic/backupImportLogic';
-import { createFullBackupZip } from '../src/lib/logic/backupLogic';
+import { createFullBackupZip, createSetlistBackupZip } from '../src/lib/logic/backupLogic';
 import type { AppSettings, Song } from '../src/lib/model/types';
 
 const sample = (name: string) => readFileSync(resolve(__dirname, '../../format/samples', name));
@@ -103,10 +103,40 @@ describe('export → import round trip', () => {
     expect(imported.backupSong.notes[0].text).toBe('Capo 2');
     expect(result.manifest.fileHashes['files/song-x.pdf']).toBe(imported.backupSong.fileHash);
   });
+
+  it('exports and re-imports a setlist backup ZIP', async () => {
+    const pdf = new TextEncoder().encode('%PDF-1.4 setlist test');
+    const song = songFromJson({
+      id: 'song-s1', title: 'Ostern Lied', artist: 'B', fileUri: 'opfs://songs/song-s1.pdf',
+    });
+    const setlist = {
+      id: 'setlist-1', title: 'Ostern 2025', date: '2025-04-20', songIds: ['song-s1'], notes: 'Festmesse', lastSongId: null, lastPage: 0, lastPlayedAt: 0,
+    };
+    const settings = { userId: 'user-setlist', userName: 'Maria' } as AppSettings;
+
+    const blob = await createSetlistBackupZip(setlist, [song], settings, async () => new File([pdf], 'song-s1.pdf'));
+
+    const result = await analyzeBackupFile(await blob.arrayBuffer(), [], []);
+    expect(result.manifest.type).toBe('SETLIST');
+    expect(result.manifest.title).toBe('Ostern 2025');
+    expect(result.songs).toHaveLength(1);
+    expect(result.songs[0].backupSong.title).toBe('Ostern Lied');
+    expect(result.setlists).toHaveLength(1);
+    expect(result.setlists[0].backupSetlist.title).toBe('Ostern 2025');
+  });
 });
 
 describe('Kompatibilität Web → Android', () => {
   const isInt = (v: unknown) => typeof v === 'number' && Number.isInteger(v);
+
+  it('setzt darkMode auf NORMAL, wenn es fehlt oder unbekannt ist', () => {
+    expect(songFromJson({ id: 's', title: 'T', fileUri: '' }).darkMode).toBe('NORMAL');
+    expect(songFromJson({ id: 's', title: 'T', fileUri: '', darkMode: 'SEPIA' }).darkMode).toBe('NORMAL');
+    const song = songFromJson({ id: 's', title: 'T', fileUri: '', darkMode: 'INVERTED' });
+    expect(song.darkMode).toBe('INVERTED');
+    expect(songToJson(song).darkMode).toBe('INVERTED');
+    expect(songToJson({ ...song, darkMode: undefined as any }).darkMode).toBe('NORMAL');
+  });
 
   it('schreibt nur ganze Zahlen in Felder, die Android als Int/Long liest', () => {
     const base = songFromJson({ id: 's', title: 'T', fileUri: '' });

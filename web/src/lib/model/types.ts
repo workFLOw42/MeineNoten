@@ -1,5 +1,8 @@
 export type SongSource = 'PDF' | 'MUSIC_XML' | 'TEXT';
 
+/** Darstellung der Noten im Dunkeldesign (wie ScoreDarkMode in Android). Im hellen Design immer normal. */
+export type ScoreDarkMode = 'NORMAL' | 'SOFT' | 'INVERTED';
+
 export interface PageView {
   scale: number;
   offsetXRatio: number;
@@ -30,6 +33,7 @@ export interface Song {
   lyrics: string;
   lastOpenedAt: number;
   fileHash: string;
+  darkMode: ScoreDarkMode;
 }
 
 export interface Setlist {

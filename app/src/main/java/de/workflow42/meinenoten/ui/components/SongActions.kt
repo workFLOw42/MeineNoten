@@ -32,6 +32,7 @@ import de.workflow42.meinenoten.data.AppSettings
 import de.workflow42.meinenoten.model.otherNotes
 import de.workflow42.meinenoten.model.ownNote
 import de.workflow42.meinenoten.model.withOwnNote
+import de.workflow42.meinenoten.model.ScoreDarkMode
 import de.workflow42.meinenoten.model.Setlist
 import de.workflow42.meinenoten.model.Song
 import de.workflow42.meinenoten.model.SongSource
@@ -206,6 +207,7 @@ fun EditSongDialog(
     var otherNotes by remember(song.id) { mutableStateOf(song.notes.otherNotes(settings.userId)) }
     var editLyrics by remember(song.id) { mutableStateOf(song.lyrics) }
     var editPageViews by remember(song.id) { mutableStateOf(song.pageViews) }
+    var editDarkMode by remember(song.id) { mutableStateOf(song.scoreDarkMode) }
 
     val genreSuggestions = remember(knownGenres) {
         knownGenres.asSequence().filter { it.isNotBlank() }.distinct().sorted().toList()
@@ -395,6 +397,14 @@ fun EditSongDialog(
                             }
                         }
                     }
+
+                    if (song.hasFile) {
+                        ScoreDarkModeChoice(
+                            selected = editDarkMode,
+                            onSelect = { editDarkMode = it },
+                            modifier = Modifier.padding(bottom = 16.dp),
+                        )
+                    }
                 }
 
                 Text(
@@ -453,6 +463,7 @@ fun EditSongDialog(
                                 ),
                             lyrics = editLyrics,
                             pageViews = editPageViews,
+                            darkMode = editDarkMode.name,
                         )
                     )
                 }

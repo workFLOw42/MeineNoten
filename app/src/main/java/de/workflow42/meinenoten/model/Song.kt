@@ -8,6 +8,27 @@ enum class SongSource {
     PDF, MUSIC_XML, TEXT
 }
 
+/**
+ * How a score is shown while the app is in its dark design.
+ *
+ * In the light design every score is shown as it is, so during the day nothing changes;
+ * with the theme set to *System* the device switches between the two by itself.
+ */
+enum class ScoreDarkMode {
+    /** The page as it is: white paper, black notes. */
+    NORMAL,
+    /** Dimmed, so a white page does not glare in a dark room. */
+    SOFT,
+    /** Light notes on a dark page. */
+    INVERTED;
+
+    companion object {
+        /** Unknown or missing values fall back to [NORMAL] instead of failing. */
+        fun fromStored(value: String): ScoreDarkMode =
+            entries.firstOrNull { it.name == value } ?: NORMAL
+    }
+}
+
 @Serializable
 data class Song(
     val id: String,
@@ -78,7 +99,19 @@ data class Song(
      * title or id. Proves equality only – a re-saved scan has different bytes.
      */
     val fileHash: String = "",
+    /**
+     * Stored name of a [ScoreDarkMode]; read through [scoreDarkMode].
+     *
+     * A plain string rather than the enum on purpose: kotlinx.serialization rejects an
+     * unknown enum value and would then fail the *whole* songs.json – a backup from a
+     * newer version with a fourth mode must still import. Missing = [ScoreDarkMode.NORMAL].
+     */
+    val darkMode: String = ScoreDarkMode.NORMAL.name,
 ) {
+    /** How the score is shown in the dark design; unknown values count as normal. */
+    val scoreDarkMode: ScoreDarkMode
+        get() = ScoreDarkMode.fromStored(darkMode)
+
     /**
      * Turns a memo from before authorship into the own note of [userId].
      *

@@ -13,6 +13,10 @@
     pdfDoc,
     pageIndex,
     pageView,
+    tapZonesEnabled = true,
+    tapZoneSize = 'LOWER_THIRD',
+    swapTapZones = false,
+    filter = 'none',
     onPageViewChange,
     onNext,
     onPrev,
@@ -20,6 +24,11 @@
     pdfDoc: any;
     pageIndex: number;
     pageView: PageView | undefined;
+    tapZonesEnabled?: boolean;
+    tapZoneSize?: 'LOWER_THIRD' | 'LOWER_HALF' | 'FULL_HEIGHT';
+    swapTapZones?: boolean;
+    /** CSS-Filter für das Dunkeldesign (normal / dezenter / invertiert). */
+    filter?: string;
     onPageViewChange: (view: PageView) => void;
     onNext: () => void;
     onPrev: () => void;
@@ -234,10 +243,15 @@
     // Einfacher Tipp: kurz warten, ob ein zweiter folgt; dann Tippzone auswerten
     tapTimer = setTimeout(() => {
       tapTimer = null;
+      if (!tapZonesEnabled) return;
       const rect = container!.getBoundingClientRect();
-      const rel = (x - rect.left) / rect.width;
-      if (rel < 0.3) onPrev();
-      else if (rel > 0.7) onNext();
+      const heightFraction = tapZoneSize === 'FULL_HEIGHT' ? 1.0 : tapZoneSize === 'LOWER_HALF' ? 0.5 : (1 / 3);
+      const zoneTop = rect.top + rect.height * (1 - heightFraction);
+      if (y < zoneTop) return;
+
+      const leftHalf = (x - rect.left) < (rect.width / 2);
+      if (leftHalf !== swapTapZones) onPrev();
+      else onNext();
     }, 250);
   }
 
@@ -285,6 +299,7 @@
     style:width={cssW ? `${cssW}px` : null}
     style:height={cssH ? `${cssH}px` : null}
     style:transform={`translate(${ox * width}px, ${oy * height}px) scale(${scale})`}
+    style:filter={filter}
   ></canvas>
 </div>
 

@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import de.workflow42.meinenoten.model.PageView
+import de.workflow42.meinenoten.model.ScoreDarkMode
 import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
 import de.workflow42.meinenoten.R
@@ -89,7 +90,10 @@ fun PdfView(
     onPageViewChange: (PageView) -> Unit = {},
     modifier: Modifier = Modifier,
     onPageCountReady: (Int) -> Unit = {},
+    /** Look of the page in the dark design, see [effectiveScoreMode]. */
+    darkMode: ScoreDarkMode = ScoreDarkMode.NORMAL,
 ) {
+    val colorFilter = scoreColorFilter(effectiveScoreMode(darkMode))
     val context = LocalContext.current
     var visible by remember(fileUri, currentPage) { 
         mutableStateOf(GlobalPdfCache.get(fileUri, currentPage)) 
@@ -170,6 +174,7 @@ fun PdfView(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = stringResource(R.string.cd_page_number, currentPage + 1),
                 contentScale = ContentScale.Fit,
+                colorFilter = colorFilter,
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(fileUri, currentPage) {

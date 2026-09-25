@@ -1,4 +1,4 @@
-import type { Song, SongNote, Setlist, PageView, BackupManifest, SongSource } from '../model/types';
+import type { Song, SongNote, Setlist, PageView, BackupManifest, SongSource, ScoreDarkMode } from '../model/types';
 
 /**
  * Umwandlung zwischen dem ZIP-Format (siehe format/BACKUP_FORMAT.md) und dem Web-Datenmodell.
@@ -14,6 +14,11 @@ import type { Song, SongNote, Setlist, PageView, BackupManifest, SongSource } fr
 const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : fallback);
 const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
 const SOURCES: SongSource[] = ['PDF', 'MUSIC_XML', 'TEXT'];
+const DARK_MODES: ScoreDarkMode[] = ['NORMAL', 'SOFT', 'INVERTED'];
+
+/** Fehlender oder unbekannter Wert (ältere Sicherung, neuere App) → NORMAL. */
+export const scoreDarkModeOf = (v: unknown): ScoreDarkMode =>
+  DARK_MODES.includes(v as ScoreDarkMode) ? (v as ScoreDarkMode) : 'NORMAL';
 
 function normalizeNote(raw: any): SongNote | null {
   if (!raw || typeof raw !== 'object' || typeof raw.authorId !== 'string') return null;
@@ -61,6 +66,7 @@ export function songFromJson(raw: any): Song {
     lyrics: str(raw?.lyrics),
     lastOpenedAt: num(raw?.lastOpenedAt),
     fileHash: str(raw?.fileHash),
+    darkMode: scoreDarkModeOf(raw?.darkMode),
   };
 }
 
@@ -94,6 +100,7 @@ export function songToJson(song: Song): Record<string, unknown> {
     bpm: toInt(song.bpm, 120, 1),
     totalBars: toInt(song.totalBars, 0),
     lastOpenedAt: toInt(song.lastOpenedAt, 0),
+    darkMode: scoreDarkModeOf(song.darkMode),
     pageViews,
     notes: legacyNotes ?? '',
     songNotes: (notes ?? []).map(n => ({ ...n, editedAt: toInt(n.editedAt, 0) })),

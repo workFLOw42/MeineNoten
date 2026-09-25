@@ -181,6 +181,11 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
+    <string name="label_score_dark_mode">Score in dark design</string>
+    <string name="score_dark_mode_normal">Normal</string>
+    <string name="score_dark_mode_soft">Dimmed</string>
+    <string name="score_dark_mode_inverted">Inverted</string>
+    <string name="msg_score_dark_mode_hint">Only applies while the app is dark. In the light design the score is always shown normally.</string>
     <string name="settings_section_person">Person</string>
     <string name="settings_user_name">Your name</string>
     <string name="settings_user_name_hint">Shown with your notes and in the title. Empty = “Meine Noten”.</string>

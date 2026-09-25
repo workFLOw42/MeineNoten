@@ -180,6 +180,11 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Hell</string>
     <string name="settings_theme_dark">Dunkel</string>
+    <string name="label_score_dark_mode">Noten im Dunkeldesign</string>
+    <string name="score_dark_mode_normal">Normal</string>
+    <string name="score_dark_mode_soft">Dezenter</string>
+    <string name="score_dark_mode_inverted">Invertiert</string>
+    <string name="msg_score_dark_mode_hint">Wirkt nur, solange die App dunkel ist. Im hellen Design werden die Noten immer normal gezeigt.</string>
     <string name="settings_section_person">Person</string>
     <string name="settings_user_name">Dein Name</string>
     <string name="settings_user_name_hint">Steht an deinen Notizen und im Titel. Leer = „Meine Noten“.</string>

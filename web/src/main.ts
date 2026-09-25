@@ -37,6 +37,11 @@ updateTopInset();
 window.addEventListener('resize', updateTopInset);
 window.addEventListener('orientationchange', () => setTimeout(updateTopInset, 300));
 
+// Storage-Persistenz beim Browser anfragen (verhindert Datenlöschung in Safari)
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist().catch(() => {});
+}
+
 // Service Worker registrieren (Offline-Start + Installierbarkeit)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {

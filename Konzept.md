@@ -34,6 +34,7 @@ Seitenaufbau, keine Fehlbedienung durch versehentliches Antippen.
 | Komfort | Setlist-Reihenfolge zum Springen im Navigationsmenü |
 | Komfort | Einstellungsseite für Statusleiste, Tippzonen, Pedal und Anzeige |
 | Komfort | Design wählbar: System, Hell, Dunkel |
+| Anzeige | Noten im Dunkeldesign pro Lied: Normal, Dezenter oder Invertiert |
 | Daten | Import kopiert Dateien in den App-Speicher |
 | Daten | Setlists: anlegen, sortieren, Notizen |
 | Daten | Lieder löschen samt Datei und Setlist-Verweisen |
@@ -133,6 +134,112 @@ keine Nummer über Rechner oder Checkouts hinweg wiederholen kann.
 Ab API 36 lässt sich die randlose Darstellung nicht abschalten; Inhalte laufen unter
 Status- und Navigationsleiste. `enableEdgeToEdge()` in `MainActivity`, und alle Screens
 geben das `innerPadding` ihres `Scaffold` weiter – auch die Notenansicht.
+
+---
+
+## 2b. Web-App (iPad und iPhone)
+
+Für Mitspielende mit Apple-Geräten gibt es eine Web-App im Ordner `web/`. Sie ist
+**kein Ersatz** für die Android-App, sondern ein Begleiter: Sicherungen und geteilte
+Setlists aus Android einlesen, Noten anzeigen, in der Setlist blättern. Gepflegt wird
+die Sammlung weiterhin auf Android.
+
+### Warum eine Web-App statt einer iOS-App
+
+Eine native iOS-App braucht einen Mac, ein bezahltes Entwicklerkonto und die
+App-Store-Prüfung. Eine Web-App läuft in Safari, lässt sich über *Zum Home-Bildschirm*
+wie eine App starten und funktioniert danach offline. Für einen kleinen Kreis von
+Chormitgliedern ist das der kürzeste Weg.
+
+### Technik
+
+| Bereich | Umsetzung |
+|---|---|
+| Oberfläche | Svelte 5 (Runes: `$state`, `$derived`, `$effect`), TypeScript, Vite |
+| PDF | pdf.js 3.x, Worker lokal mitgebaut (kein CDN) |
+| MusicXML | OpenSheetMusicDisplay, direkt im Browser |
+| ZIP | JSZip |
+| Daten | IndexedDB (`meinenoten_db`): Lieder, Setlists, Einstellungen |
+| Notendateien | OPFS, bei fehlendem `createWritable()` (ältere Safari) IndexedDB |
+| Offline | Service Worker `public/sw.js`, App-Shell network-first, Assets cache-first |
+| Installierbar | `manifest.json`, Symbole 192/512 px |
+| Tests | Vitest, `npm test` |
+| Auslieferung | GitHub Actions → GitHub Pages unter `/MeineNoten/app/` |
+
+Das Datenformat ist **dasselbe wie in Android**: `songs.json`, `setlists.json`,
+`settings.json` und das Manifest der ZIP-Sicherung werden gelesen und geschrieben wie
+dort. Die Lesefunktionen in `serialization.ts` füllen fehlende Felder mit denselben
+Standardwerten wie kotlinx.serialization, damit Sicherungen beider Seiten austauschbar
+bleiben. Die Zoom-Werte (`scale`, `offsetXRatio`, `offsetYRatio`) sind wie in
+`PdfView.kt` definiert, sodass gespeicherte Ausschnitte auf beiden Geräten passen.
+
+### Umgesetzt
+
+| Bereich | Funktion |
+|---|---|
+| Anzeige | PDF seitenverhältnistreu, gestochen scharf auch beim Heranzoomen |
+| Anzeige | Zwei-Finger-Zoom (1- bis 5-fach), Verschieben, Doppeltipp, pro Seite gespeichert |
+| Anzeige | MusicXML über OSMD |
+| Anzeige | Textnotizen (`TEXT`-Lieder) und umschaltbare Liedtexte |
+| Anzeige | Notizen-Symbol in der Notenansicht: eigene Notiz & fremde Notizen mit Personenfarben einblendbar |
+| Blättern | Tastatur und Bluetooth-Pedal (Pfeiltasten, Bild auf/ab, Leertaste) mit Richtungsumkehr |
+| Blättern | Tippzonen unten: Größe wählbar (Drittel, Hälfte, Voll), Richtung tauschbar |
+| Blättern | Statusleiste: Position, Seite, Knöpfe ◀ ▶ und Ankündigung ⏭ / ⏮ vor Liedwechsel |
+| Blättern | Grüner Randblitz bei Seiten- und Liedwechsel, Titel-Banner bei Liedwechsel |
+| Blättern | Am Liedende in der Setlist zum nächsten Lied, rückwärts auf dessen letzte Seite |
+| Setlist | Liste in Reihenfolge, *Von vorne*, *Weiter bei …* (Lied und Seite gemerkt) |
+| Setlists | anlegen, bearbeiten, duplizieren, löschen, Lieder per Suche hinzufügen, reihum umordnen (▲/▼) und entfernen |
+| Setlists | Suche, Zeitraum-Filter (*Alle*, *Kommende*, *Vergangene*), 3 Sortiermodi (*Datum*, *Titel*, *Zuletzt gespielt*), *Nächster Auftritt* hervorgehoben |
+| Songliste | Suche, Genre-Filter, Setlist-Filter, 5 Sortiermodi (*Künstler*, *Titel*, *Zuletzt geöffnet*, *Genre*, *Setlist-Reihenfolge*), Buchstabenleiste (A-Z) |
+| Daten | Import von PDF und MusicXML |
+| Daten | Lied bearbeiten: Titel, Künstler, Fassung, Genre, BPM, Liedtext, eigene Notiz |
+| Daten | Lied löschen samt Notendatei und Verweisen in Setlists |
+| Sicherung | *Alles sichern* als ZIP im Android-Format |
+| Sicherung | *Setlist teilen* als Setlist-ZIP mit Urheberrechtshinweis und Web Share API (native Freigabe an AirDrop, WhatsApp, Mail) |
+| Sicherung | *Sicherung einlesen* mit Vergleichsmaske und Aktion pro Lied |
+| Sicherung | Identität übernehmen, Notizen anderer Personen zusammenführen |
+| Sicherung | Setlist-Verweise folgen umbenannten Lied-IDs (*Beide behalten*) |
+| Komfort | Display bleibt an (Wake Lock mit automatischer Re-Aktivierung bei `visibilitychange`), Titel „‹Name›s Noten“ |
+| Komfort | Vollständige Einstellungsseite (Statusleiste, Blättern, Pedal, Anzeige, Person, Notizen anderer, Sicherung) |
+| Komfort | Design-Wahl: System, Hell, Dunkel (`themeMode`) |
+| Anzeige | Noten im Dunkeldesign pro Lied: Normal, Dezenter, Invertiert (`darkMode`) |
+| Komfort | Browser-Speicherpersistenz angefragt (`navigator.storage.persist()`) |
+| Diagnose | Selbsttest (Tipp auf die Versionszeile): IndexedDB, OPFS, Wake Lock, PDF, Tasten |
+
+### Besonderheiten von Safari auf iOS
+
+Die meisten Stolpersteine der Web-App sind iOS-spezifisch:
+
+| Problem | Lösung |
+|---|---|
+| Canvas über ~16,7 Mio. Pixel bleibt leer | Auflösung auf 12 Mio. Pixel begrenzt |
+| `user-scalable=no` wird ignoriert | `gesture*`-Ereignisse abfangen, Zoom nur in der Notenansicht |
+| Statusleiste verdeckt Kopfzeile als Home-App | Abstand selbst messen (`--top-inset`), mindestens 20 px |
+| Unschärfe-Streifen unter der Statusleiste | Bereich freihalten (`--edge-blur`, 26 px) |
+| OPFS vorhanden, aber nicht schreibbar | Ausweich auf IndexedDB (`idb://`-Verweis) |
+| `$state`-Proxys nicht klonbar (`DataCloneError`) | vor dem Speichern in reines Objekt umwandeln |
+| Alte Version aus dem Cache | Cache-Name im Service Worker bei jeder Auslieferung erhöhen |
+| Wake Lock geht nach App-Wechsel verloren | bei `visibilitychange` neu anfordern, wenn App sichtbar wird |
+| Website-Daten-Löschung durch Safari | `navigator.storage.persist()` beim Start aufrufen |
+
+> [!IMPORTANT]
+> Safari kann Website-Daten nach längerer Nichtnutzung löschen. Die Web-App ist deshalb
+> ausdrücklich **nicht** der Ort, an dem Noten dauerhaft liegen sollen. Die maßgebliche
+> Sammlung bleibt auf Android, das iPad bekommt bei Bedarf eine frische Sicherung.
+
+### Versionierung
+
+Die Webversion ist die Anzahl der Commits, die `web/` verändert haben – sie zählt von
+selbst hoch. Dazu kommt ein Build-Zeitstempel (UTC) im Tooltip der Versionszeile. So
+ist auf dem Gerät sofort sichtbar, ob wirklich der neueste Stand läuft. Der Workflow
+lädt dafür die volle Git-Historie (`fetch-depth: 0`).
+
+### Noch nicht umgesetzt
+
+| Bereich | Fehlt |
+|---|---|
+| Blättern | Umblättern in MusicXML |
+| Sprache | Englisch (Web-App ist derzeit deutsch) |
 
 ---
 
@@ -1138,6 +1245,16 @@ wieder entfernt. Der Bildschirm bleibt also nur an, solange Noten offen sind. Mi
 
 ### Design und Startbildschirm
 
+**Noten im Dunkeldesign.** Die Noten folgen dem Design der App: im hellen Design immer
+unverändert, im dunklen so, wie es beim Lied unter *Bearbeiten* eingestellt ist –
+*Normal*, *Dezenter* (abgedunkeltes Papier) oder *Invertiert* (helle Noten auf dunklem
+Grund). Steht das Design auf *System*, wechselt das Gerät tagsüber und abends von selbst.
+Pro Lied statt global, weil nicht jedes Blatt das verkraftet: Farbige Scans oder Fotos
+sehen invertiert schlecht aus, reine Notensätze gut. Umgesetzt als Farbfilter beim
+Zeichnen (Android `ColorFilter`, Web CSS `filter`), damit zwischengespeicherte Seiten beim
+Wechsel nicht neu gerendert werden müssen. Das Feld `darkMode` wird mitgesichert; fehlt
+es in einer Sicherung oder ist der Wert unbekannt, gilt *Normal*.
+
 Das Design folgt dem System oder ist fest auf Hell bzw. Dunkel gestellt. Die Symbole in
 Status- und Navigationsleiste folgen dem **App**-Design, nicht dem des Geräts – sonst
 stünden bei „Hell“ auf einem dunkel eingestellten Telefon helle Symbole auf hellem Grund.
@@ -1258,6 +1375,30 @@ app/src/main/
 > [!NOTE]
 > Das Setlist-Detail liegt zusammen mit der Übersicht in `SetlistScreen.kt`. Der
 > Paketpfad ist `de.workflow42.meinenoten`.
+
+### Web-App
+
+```
+web/
+├── vite.config.js            Basispfad, Webversion, Build-Zeitstempel
+├── public/
+│   ├── sw.js                 Service Worker (Offline, Cache-Name je Auslieferung)
+│   └── manifest.json         Home-Bildschirm-App
+├── src/
+│   ├── main.ts               Start, iOS-Gesten, Statusleisten-Abstand, SW-Registrierung
+│   ├── App.svelte            alle Seiten, Navigation, Sicherung einlesen
+│   ├── routes/SelfTest.svelte  Diagnose
+│   └── lib/
+│       ├── model/types.ts    Song, Setlist, Einstellungen (wie Android)
+│       ├── storage/db.ts     IndexedDB, OPFS mit IndexedDB-Ausweich
+│       ├── pdf/              pdf.js-Rendering, Viewer mit Zoom und Tippzonen
+│       ├── musicxml/         OSMD
+│       └── logic/            Serialisierung, Sicherung schreiben/einlesen, Suche
+└── tests/                    Vitest, u. a. mit einer echten Android-Sicherung
+```
+
+Ausgeliefert wird über `.github/workflows/deploy-web.yml` bei jedem Push auf `main`,
+der `web/` oder `docs/` berührt.
 
 ---
 

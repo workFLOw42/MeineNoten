@@ -482,6 +482,7 @@ fun SongDetailScreen(
                 song.sourceType == SongSource.MUSIC_XML -> {
                     MusicXmlView(
                         fileUri = song.fileUri,
+                        darkMode = song.scoreDarkMode,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -490,6 +491,7 @@ fun SongDetailScreen(
                         fileUri = song.fileUri,
                         currentPage = currentPage.coerceAtLeast(0),
                         pageView = localPageViews[currentPage.coerceAtLeast(0)] ?: PageView(),
+                        darkMode = song.scoreDarkMode,
                         onPageViewChange = { newView ->
                             localPageViews = localPageViews.toMutableMap().apply {
                                 put(currentPage.coerceAtLeast(0), newView)

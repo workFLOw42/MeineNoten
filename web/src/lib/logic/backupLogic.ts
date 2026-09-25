@@ -82,3 +82,55 @@ export async function createFullBackupZip(
 
   return await zip.generateAsync({ type: 'blob' });
 }
+
+export async function createSetlistBackupZip(
+  setlist: Setlist,
+  allSongs: Song[],
+  settings: AppSettings,
+  getScoreFile: (fileUri: string) => Promise<File | null>
+): Promise<Blob> {
+  const zip = new JSZip();
+  const fileHashes: Record<string, string> = {};
+  const exportedSongs: Record<string, unknown>[] = [];
+
+  const setlistSongsMap = new Map(allSongs.map(s => [s.id, s]));
+  const setlistSongs = setlist.songIds.map(id => setlistSongsMap.get(id)).filter((s): s is Song => !!s);
+
+  for (const song of setlistSongs) {
+    let exported: Song = { ...song, fileUri: '' };
+    if (song.fileUri) {
+      const file = await getScoreFile(song.fileUri);
+      if (file) {
+        const dot = file.name.lastIndexOf('.');
+        const ext = dot >= 0 ? file.name.substring(dot + 1).toLowerCase() : 'pdf';
+        const zipPath = `files/${song.id}.${ext}`;
+        const data = await file.arrayBuffer();
+        zip.file(zipPath, data, { compression: 'STORE' });
+        const hash = song.fileHash || await sha256Hex(data);
+        fileHashes[zipPath] = hash;
+        exported = { ...song, fileUri: zipPath, fileHash: hash };
+      }
+    }
+    exportedSongs.push(songToJson(exported));
+  }
+
+  const json = (v: unknown) => JSON.stringify(v, null, 2);
+  zip.file('songs.json', json(exportedSongs), { compression: 'DEFLATE' });
+  zip.file('setlists.json', json([setlistToJson(setlist)]), { compression: 'DEFLATE' });
+  zip.file('settings.json', json(serializableSettings(settings)), { compression: 'DEFLATE' });
+
+  const manifest: BackupManifest = {
+    formatVersion: 1,
+    appVersion: 'web-0.1.0',
+    type: 'SETLIST',
+    createdAt: Date.now(),
+    deviceName: 'Browser',
+    authorId: settings.userId,
+    authorName: settings.userName,
+    title: setlist.title,
+    fileHashes,
+  };
+  zip.file('manifest.json', json(manifest), { compression: 'DEFLATE' });
+
+  return await zip.generateAsync({ type: 'blob' });
+}

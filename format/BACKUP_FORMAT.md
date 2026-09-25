@@ -88,13 +88,15 @@ Jedes Element der Liste enthält:
   ],
   "lyrics": "",
   "lastOpenedAt": 1740000000000,
-  "fileHash": "ba7816bf8f01cfea..."
+  "fileHash": "ba7816bf8f01cfea...",
+  "darkMode": "INVERTED"
 }
 ```
 
 - `sourceType`: `"PDF"`, `"MUSIC_XML"`, oder `"TEXT"`.
 - `pageViews`: JSON-Objekt mit Seitenindex als String-Schlüssel (`"0"`, `"1"`).
 - `songNotes`: Liste von Notizen pro Person.
+- `darkMode`: Darstellung der Noten im Dunkeldesign: `"NORMAL"`, `"SOFT"` (dezenter) oder `"INVERTED"`. Im hellen Design werden Noten immer normal gezeigt. **Fehlt das Feld oder hat es einen unbekannten Wert, gilt `"NORMAL"`** – ältere Sicherungen bleiben dadurch fehlerfrei lesbar.
 - **Unbekannte Felder:** Reader (egal ob Android oder Web) müssen unbekannte Felder beim Deserialisieren ignorieren und beim erneuten Schreiben unverändert mitnehmen.
 
 ### `setlists.json` (Liste von `Setlist`)

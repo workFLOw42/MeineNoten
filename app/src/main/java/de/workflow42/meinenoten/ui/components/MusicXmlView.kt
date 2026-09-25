@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
 import de.workflow42.meinenoten.R
+import de.workflow42.meinenoten.model.ScoreDarkMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -38,7 +39,10 @@ fun MusicXmlView(
     fileUri: String,
     modifier: Modifier = Modifier,
     zoom: Float = 1.0f,
+    /** Look of the score in the dark design, see [effectiveScoreMode]. */
+    darkMode: ScoreDarkMode = ScoreDarkMode.NORMAL,
 ) {
+    val cssFilter = scoreCssFilter(effectiveScoreMode(darkMode))
     val context = LocalContext.current
     var xmlContent by remember(fileUri) { mutableStateOf<String?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -90,6 +94,16 @@ fun MusicXmlView(
 
     LaunchedEffect(zoom, webView) {
         webView?.evaluateJavascript("setZoom($zoom)", null)
+    }
+
+    // A CSS filter on the page rather than re-colouring the notes in OSMD: no re-render,
+    // and title, lyrics and chord symbols change along with the notes.
+    LaunchedEffect(cssFilter, webView) {
+        webView?.evaluateJavascript(
+            "document.documentElement.style.filter='$cssFilter';" +
+                "document.documentElement.style.backgroundColor='#ffffff';",
+            null,
+        )
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

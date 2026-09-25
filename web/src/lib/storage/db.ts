@@ -218,3 +218,28 @@ export async function saveSettingsDB(settings: AppSettings): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+export async function deleteSongFromDB(
+  songToDelete: Song,
+  currentSongs: Song[],
+  currentSetlists: Setlist[]
+): Promise<{ songs: Song[]; setlists: Setlist[] }> {
+  if (songToDelete.fileUri) {
+    await deleteScoreFile(songToDelete.fileUri);
+  }
+
+  const updatedSongs = currentSongs.filter(s => s.id !== songToDelete.id);
+  const updatedSetlists = currentSetlists.map(setlist => {
+    if (!setlist.songIds.includes(songToDelete.id)) return setlist;
+    const newSongIds = setlist.songIds.filter(id => id !== songToDelete.id);
+    const lastSongId = setlist.lastSongId === songToDelete.id ? null : setlist.lastSongId;
+    const lastPage = lastSongId === null ? 0 : setlist.lastPage;
+    return { ...setlist, songIds: newSongIds, lastSongId, lastPage };
+  });
+
+  await saveSongsDB(updatedSongs);
+  await saveSetlistsDB(updatedSetlists);
+
+  return { songs: updatedSongs, setlists: updatedSetlists };
+}
+
