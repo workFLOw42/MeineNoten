@@ -22,3 +22,7 @@ keystore.properties
 
 # Notizen des KI-Assistenten in Android Studio
 .artifacts/
+
+# Eigene Test-Sicherungen (Dateiname beginnt mit dem Datum, z. B. 20260925_Komplett_…).
+# Die festen Beispiele wie komplett_minimal.zip bleiben versioniert.
+/format/samples/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*.zip
