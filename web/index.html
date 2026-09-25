@@ -19,8 +19,25 @@
         box-sizing: border-box;
       }
       html, body {
+        /* Dokument fest am Bildschirm: iOS darf die Seite weder verschieben noch zoomen,
+           sonst rutscht die Kopfzeile unter die Statusleiste. Gescrollt wird nur in Listen. */
+        position: fixed;
+        inset: 0;
+        width: 100%;
         height: 100%;
+        overflow: hidden;
         overscroll-behavior: none;
+        touch-action: pan-x pan-y;
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      /* Abstand zur iOS-Statusleiste; --top-inset setzt main.ts, falls env() 0 liefert,
+         die App aber trotzdem unter der Statusleiste beginnt (iPhone mit Home-Taste). */
+      .app-root {
+        padding: max(env(safe-area-inset-top, 0px), var(--top-inset, 0px)) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
       }
       body {
         margin: 0;

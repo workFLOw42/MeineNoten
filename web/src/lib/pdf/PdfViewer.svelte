@@ -87,47 +87,56 @@
   });
 
   // ---- Gesten ----
-  const pointers = new Map<number, { x: number; y: number }>();
+  // Touch-Events statt Pointer-Events: e.touches ist immer die vollständige, aktuelle Liste
+  // der Finger. Bei Pointer-Events bleiben auf iOS nach abgebrochenen Gesten Finger "hängen",
+  // dann rechnet der Zoom mit falschen Abständen und lässt sich nicht mehr verkleinern.
   let startDist = 0;
   let startScale = 1;
   let lastMid = { x: 0, y: 0 };
   let moved = false;
-  let downAt = { x: 0, y: 0, t: 0 };
+  let gesture = false;
+  let downAt = { x: 0, y: 0 };
   let lastTap = { x: 0, y: 0, t: 0 };
   let tapTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const mid = () => {
-    const p = [...pointers.values()];
-    return p.length === 1 ? p[0] : { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
-  };
-  const dist = () => {
-    const [a, b] = [...pointers.values()];
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  };
+  const pts = (e: TouchEvent) => Array.from(e.touches, t => ({ x: t.clientX, y: t.clientY }));
+  const mid = (p: { x: number; y: number }[]) =>
+    p.length === 1 ? p[0] : { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 };
+  const dist = (p: { x: number; y: number }[]) => Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
 
-  function onPointerDown(e: PointerEvent) {
-    container?.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.size === 1) {
-      moved = false;
-      downAt = { x: e.clientX, y: e.clientY, t: Date.now() };
-    }
-    if (pointers.size === 2) {
-      startDist = dist();
+  /** Neuer Ausgangspunkt, sobald sich die Zahl der Finger ändert. */
+  function resetGesture(e: TouchEvent) {
+    const p = pts(e);
+    if (p.length === 0) return;
+    lastMid = mid(p);
+    if (p.length >= 2) {
+      startDist = dist(p);
       startScale = scale;
-      moved = true;
+    } else {
+      startDist = 0;
     }
-    lastMid = mid();
   }
 
-  function onPointerMove(e: PointerEvent) {
-    if (!pointers.has(e.pointerId)) return;
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    const m = mid();
+  function onTouchStart(e: TouchEvent) {
+    e.preventDefault();
+    if (e.touches.length === 1 && !gesture) {
+      moved = false;
+      downAt = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    if (e.touches.length >= 2) moved = true;
+    gesture = true;
+    resetGesture(e);
+  }
 
-    if (pointers.size >= 2 && startDist > 0) {
+  function onTouchMove(e: TouchEvent) {
+    e.preventDefault();
+    const p = pts(e);
+    if (p.length === 0) return;
+    const m = mid(p);
+
+    if (p.length >= 2 && startDist > 0) {
       const oldScale = scale;
-      const newScale = clamp(startScale * (dist() / startDist), MIN, MAX);
+      const newScale = clamp(startScale * (dist(p) / startDist), MIN, MAX);
       // Um den Mittelpunkt der Finger zoomen
       const rect = container!.getBoundingClientRect();
       const fx = (m.x - rect.left - width / 2) / width;
@@ -137,8 +146,8 @@
       oy = fy - (fy - oy) * k + (m.y - lastMid.y) / height;
       scale = newScale;
       applyLimits();
-    } else if (pointers.size === 1) {
-      if (Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 10) moved = true;
+    } else if (p.length === 1) {
+      if (Math.hypot(p[0].x - downAt.x, p[0].y - downAt.y) > 10) moved = true;
       if (moved && scale > 1.01) {
         ox += (m.x - lastMid.x) / width;
         oy += (m.y - lastMid.y) / height;
@@ -148,28 +157,52 @@
     lastMid = m;
   }
 
+  function onTouchEnd(e: TouchEvent) {
+    e.preventDefault();
+    if (e.touches.length > 0) {
+      resetGesture(e); // ein Finger bleibt liegen: nahtlos weiter verschieben
+      return;
+    }
+    gesture = false;
+    if (scale < 1.03) { scale = 1; ox = 0; oy = 0; } // fast ganz raus = ganze Seite
+    if (moved) {
+      commit();
+      return;
+    }
+    const t = e.changedTouches[0];
+    if (t) handleTap(t.clientX, t.clientY);
+  }
+
+  // Maus am Desktop: ziehen verschiebt, Klick blättert (Touch läuft über die Touch-Events)
+  let mouseDown = false;
+  function onMouseDown(e: MouseEvent) {
+    mouseDown = true;
+    moved = false;
+    downAt = { x: e.clientX, y: e.clientY };
+    lastMid = { x: e.clientX, y: e.clientY };
+  }
+  function onMouseMove(e: MouseEvent) {
+    if (!mouseDown) return;
+    if (Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) moved = true;
+    if (moved && scale > 1.01) {
+      ox += (e.clientX - lastMid.x) / width;
+      oy += (e.clientY - lastMid.y) / height;
+      applyLimits();
+    }
+    lastMid = { x: e.clientX, y: e.clientY };
+  }
+  function onMouseUp(e: MouseEvent) {
+    if (!mouseDown) return;
+    mouseDown = false;
+    if (moved) commit();
+    else handleTap(e.clientX, e.clientY);
+  }
+
+  /** Speichert den Zoom und zeichnet bei Bedarf schärfer bzw. wieder in normaler Auflösung. */
   function commit() {
     onPageViewChange({ scale, offsetXRatio: ox, offsetYRatio: oy });
     const wanted = Math.max(1, Math.round(scale * 2) / 2);
     if (wanted !== renderedZoom) render(wanted);
-  }
-
-  function onPointerUp(e: PointerEvent) {
-    if (!pointers.has(e.pointerId)) return;
-    const wasPinch = pointers.size >= 2;
-    pointers.delete(e.pointerId);
-    if (pointers.size === 1) {
-      lastMid = mid();
-      startDist = 0;
-      return;
-    }
-    if (pointers.size > 0) return;
-
-    if (moved || wasPinch) {
-      commit();
-      return;
-    }
-    handleTap(e.clientX, e.clientY);
   }
 
   function handleTap(x: number, y: number) {
@@ -210,17 +243,34 @@
     applyLimits();
     commit();
   }
+  // Direkt anhängen statt ontouchstart={...}: Svelte 5 registriert Touch- und Wheel-Handler
+  // passiv, dann wirkt preventDefault() nicht und iOS zoomt/scrollt selbst mit.
+  onMount(() => {
+    const el = container!;
+    const opts = { passive: false } as const;
+    el.addEventListener('touchstart', onTouchStart, opts);
+    el.addEventListener('touchmove', onTouchMove, opts);
+    el.addEventListener('touchend', onTouchEnd, opts);
+    el.addEventListener('touchcancel', onTouchEnd, opts);
+    el.addEventListener('wheel', onWheel, opts);
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+      el.removeEventListener('wheel', onWheel);
+      if (tapTimer) clearTimeout(tapTimer);
+    };
+  });
 </script>
+
+<svelte:window onmouseup={onMouseUp} onmousemove={onMouseMove} />
 
 <div
   bind:this={container}
   class="viewer"
   role="presentation"
-  onpointerdown={onPointerDown}
-  onpointermove={onPointerMove}
-  onpointerup={onPointerUp}
-  onpointercancel={onPointerUp}
-  onwheel={onWheel}
+  onmousedown={onMouseDown}
 >
   <canvas
     bind:this={canvas}

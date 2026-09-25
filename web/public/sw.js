@@ -1,7 +1,7 @@
 // Service Worker für Meine Noten: macht die App offline startfähig.
 // Strategie: App-Shell (index.html) network-first, Assets (gehashte Dateien) cache-first.
 // Bei jeder Auslieferung erhöhen, damit alte Caches sicher verworfen werden
-const CACHE = 'meinenoten-v3';
+const CACHE = 'meinenoten-v4';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

@@ -128,6 +128,12 @@
   }
 
   function closeDetail() {
+    // Noch ausstehenden Zoom sofort speichern, nicht erst nach Ablauf des Timers
+    if (pageViewSaveTimer) {
+      clearTimeout(pageViewSaveTimer);
+      pageViewSaveTimer = null;
+      saveSongsDB($state.snapshot(songs) as Song[]);
+    }
     pdfDoc = null;
     if (setlistIndex >= 0 && currentSetlist) {
       route = 'setlist';
@@ -389,7 +395,7 @@
   let titleName = $derived(settings?.userName ? possessiveName(settings.userName) + ' Noten' : 'Meine Noten');
 </script>
 
-<main style="width: 100vw; height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: #121212; color: #fff; box-sizing: border-box; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);">
+<main class="app-root" style="position: fixed; inset: 0; display: flex; flex-direction: column; background: #121212; color: #fff; box-sizing: border-box;">
   {#if route !== 'detail' && route !== 'edit' && route !== 'selftest' && route !== 'compare' && route !== 'setlist'}
     <!-- Navigation Bar -->
     <nav style="display: flex; background: #181818; border-bottom: 1px solid #333; padding: 0 16px; overflow-x: auto; flex-shrink: 0;">
