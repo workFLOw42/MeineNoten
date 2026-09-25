@@ -1,0 +1,24 @@
+{
+  "name": "meinenoten-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "opensheetmusicdisplay": "^1.8.8",
+    "pdfjs-dist": "^3.11.174",
+    "svelte": "^5.1.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

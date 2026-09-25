@@ -1,0 +1,57 @@
+import { MusicSheet } from "../../MusicSheet";
+import { Fraction } from "../../../Common/DataObjects/Fraction";
+import { Instrument } from "../../Instrument";
+import { MultiExpression } from "../../VoiceData/Expressions/MultiExpression";
+import { IXmlElement } from "../../../Common/FileIO/Xml";
+import { SourceMeasure } from "../../VoiceData/SourceMeasure";
+export declare class ExpressionReader {
+    private musicSheet;
+    private placement;
+    private soundTempo;
+    private soundDynamic;
+    private divisions;
+    private offsetDivisions;
+    private staffNumber;
+    private globalStaffIndex;
+    private directionTimestamp;
+    private currentMultiTempoExpression;
+    private openContinuousDynamicExpressions;
+    private openContinuousTempoExpression;
+    private activeInstantaneousDynamic;
+    private openOctaveShifts;
+    private pendingOctaveShiftStops;
+    private lastWedge;
+    private WedgeYPosXml;
+    private openPedal;
+    private openWavyLine;
+    constructor(musicSheet: MusicSheet, instrument: Instrument, staffNumber: number);
+    getMultiExpression: MultiExpression;
+    readExpressionParameters(xmlNode: IXmlElement, currentInstrument: Instrument, divisions: number, inSourceMeasureCurrentFraction: Fraction, inSourceMeasureFormerFraction: Fraction, currentMeasureIndex: number, ignoreDivisionsOffset: boolean): void;
+    read(directionNode: IXmlElement, currentMeasure: SourceMeasure, inSourceMeasureCurrentFraction: Fraction, inSourceMeasurePreviousFraction?: Fraction): void;
+    /** Usually called at end of last measure. */
+    closeOpenExpressions(sourceMeasure: SourceMeasure, timestamp: Fraction): void;
+    addOctaveShift(directionNode: IXmlElement, currentMeasure: SourceMeasure, endTimestamp: Fraction, endVoiceEntryCount?: number): void;
+    addPedalMarking(directionNode: IXmlElement, currentMeasure: SourceMeasure, endTimestamp: Fraction): void;
+    private endOpenPedal;
+    addWavyLine(wavyLineNode: IXmlElement, currentMeasure: SourceMeasure, currentTimestamp: Fraction, previousTimestamp: Fraction): void;
+    private initialize;
+    private readPlacement;
+    private readExpressionPlacement;
+    private readPosition;
+    /** Parse a complex metronome mark with metronome-note elements and a metronome-relation (e.g. swing notation). */
+    private parseComplexMetronomeMark;
+    private interpretInstantaneousDynamics;
+    private interpretWords;
+    private readNumber;
+    private interpretWedge;
+    private interpretRehearsalMark;
+    private createNewMultiExpressionIfNeeded;
+    private createNewTempoExpressionIfNeeded;
+    private addWedge;
+    private fillMultiOrTempoExpression;
+    private createExpressionFromString;
+    private closeOpenContinuousDynamic;
+    private closeOpenContinuousTempo;
+    private checkIfWordsNodeIsRepetitionInstruction;
+    private hasDigit;
+}
