@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<!-- Testdatei fuer den MusicXML-Import und das Dunkeldesign: Titel, Komponist, Liedtext und Akkorde,
+     damit sich pruefen laesst, ob alles mit umgefaerbt wird. Volkslied, gemeinfrei. -->
+<score-partwise version="3.1">
+  <work><work-title>Alle meine Entchen</work-title></work>
+  <identification>
+    <creator type="composer">Volkslied</creator>
+    <creator type="lyricist">Test für Meine Noten</creator>
+  </identification>
+  <part-list>
+    <score-part id="P1"><part-name>Gesang</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="above">
+        <direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>100</per-minute></metronome></direction-type>
+      </direction>
+      <harmony><root><root-step>C</root-step></root><kind>major</kind></harmony>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>begin</syllabic><text>Al</text></lyric></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>end</syllabic><text>le</text></lyric></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>begin</syllabic><text>mei</text></lyric></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>end</syllabic><text>ne</text></lyric></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>2</duration><type>half</type><lyric><syllabic>begin</syllabic><text>Ent</text></lyric></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>2</duration><type>half</type><lyric><syllabic>end</syllabic><text>chen</text></lyric></note>
+    </measure>
+    <measure number="3">
+      <harmony><root><root-step>F</root-step></root><kind>major</kind></harmony>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>begin</syllabic><text>schwim</text></lyric></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>end</syllabic><text>men</text></lyric></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>single</syllabic><text>auf</text></lyric></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>single</syllabic><text>dem</text></lyric></note>
+    </measure>
+    <measure number="4">
+      <harmony><root><root-step>C</root-step></root><kind>major</kind></harmony>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>4</duration><type>whole</type><lyric><syllabic>single</syllabic><text>See,</text></lyric></note>
+    </measure>
+    <measure number="5">
+      <harmony><root><root-step>F</root-step></root><kind>major</kind></harmony>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>begin</syllabic><text>schwim</text></lyric></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>end</syllabic><text>men</text></lyric></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>single</syllabic><text>auf</text></lyric></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>single</syllabic><text>dem</text></lyric></note>
+    </measure>
+    <measure number="6">
+      <harmony><root><root-step>C</root-step></root><kind>major</kind></harmony>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>4</duration><type>whole</type><lyric><syllabic>single</syllabic><text>See,</text></lyric></note>
+    </measure>
+    <measure number="7">
+      <harmony><root><root-step>F</root-step></root><kind>major</kind></harmony>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>begin</syllabic><text>Köpf</text></lyric></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>end</syllabic><text>chen</text></lyric></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>single</syllabic><text>in</text></lyric></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>single</syllabic><text>das</text></lyric></note>
+    </measure>
+    <measure number="8">
+      <harmony><root><root-step>C</root-step></root><kind>major</kind></harmony>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><type>half</type><lyric><syllabic>begin</syllabic><text>Was</text></lyric></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><type>half</type><lyric><syllabic>end</syllabic><text>ser,</text></lyric></note>
+    </measure>
+    <measure number="9">
+      <harmony><root><root-step>G</root-step></root><kind>dominant</kind></harmony>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>begin</syllabic><text>Schwänz</text></lyric></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>end</syllabic><text>chen</text></lyric></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>single</syllabic><text>in</text></lyric></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><syllabic>single</syllabic><text>die</text></lyric></note>
+    </measure>
+    <measure number="10">
+      <harmony><root><root-step>C</root-step></root><kind>major</kind></harmony>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>whole</type><lyric><syllabic>single</syllabic><text>Höh.</text></lyric></note>
+      <barline location="right"><bar-style>light-heavy</bar-style></barline>
+    </measure>
+  </part>
+</score-partwise>

@@ -98,10 +98,14 @@ fun MusicXmlView(
 
     // A CSS filter on the page rather than re-colouring the notes in OSMD: no re-render,
     // and title, lyrics and chord symbols change along with the notes.
+    // On body with full viewport height rather than on the root element: browsers do not
+    // reliably filter the canvas background, which would leave a white strip below a
+    // short score.
     LaunchedEffect(cssFilter, webView) {
         webView?.evaluateJavascript(
-            "document.documentElement.style.filter='$cssFilter';" +
-                "document.documentElement.style.backgroundColor='#ffffff';",
+            "document.body.style.minHeight='100vh';" +
+                "document.body.style.backgroundColor='#ffffff';" +
+                "document.body.style.filter='$cssFilter';",
             null,
         )
     }
