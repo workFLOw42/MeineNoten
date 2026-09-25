@@ -122,6 +122,7 @@ veröffentlicht wurde.
 | 14 | 1.6.2 | Vorschau in der Vergleichsmaske, Personenfrage, Setlist-Hinweis |
 | 15 | 1.6.3 | Noten im Dunkeldesign pro Lied: Normal, Dezenter, Invertiert |
 | 16 | 1.6.4 | MusicXML: Zwei-Finger-Zoom, Dunkeldesign ohne hellen Rand |
+| 17 | 1.6.5 | Sicherung einlesen: keine Duplikate, Notizen und Notendateien bleiben erhalten |
 
 Die Nummer steht in `app/version.properties` und wird nach jedem erfolgreichen
 `:app:bundleRelease` automatisch erhöht. Die Datei gehört ins Repository, damit sich

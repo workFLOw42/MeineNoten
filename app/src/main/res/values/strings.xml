@@ -273,6 +273,7 @@
     <string name="compare_preview_pages">%1$d p. · %2$s</string>
     <string name="compare_preview_none">No preview</string>
     <string name="error_backup_read_failed">Backup could not be read</string>
+    <string name="error_backup_format_too_new">This backup uses format version %1$d and is too new for this app version. Please update the app.</string>
     <string name="error_missing_song_file">Score file missing for \"%1$s\".</string>
     <string name="backup_in_progress_title">Creating backup...</string>
     <string name="backup_progress_start">Preparing...</string>

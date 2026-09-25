@@ -267,6 +267,7 @@
     <string name="compare_preview_pages">%1$d S. · %2$s</string>
     <string name="compare_preview_none">Keine Vorschau</string>
     <string name="error_backup_read_failed">Sicherung konnte nicht gelesen werden</string>
+    <string name="error_backup_format_too_new">Diese Sicherung hat Format-Version %1$d und ist zu neu für diese App-Version. Bitte die App aktualisieren.</string>
     <string name="error_missing_song_file">Für „%1$s“ fehlt die Notendatei.</string>
     <string name="backup_in_progress_title">Sicherung wird erstellt…</string>
     <string name="backup_progress_start">Vorbereitung…</string>

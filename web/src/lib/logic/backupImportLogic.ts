@@ -1,4 +1,4 @@
-import type { Song, Setlist, BackupManifest, SerializableAppSettings, SongMatchCategory, SongImportAction } from '../model/types';
+import type { Song, Setlist, AppSettings, BackupManifest, SerializableAppSettings, SongMatchCategory, SongImportAction } from '../model/types';
 import JSZip from 'jszip';
 import { songFromJson, setlistFromJson, manifestFromJson } from './serialization';
 
@@ -28,6 +28,36 @@ export interface BackupAnalysisResult {
 }
 
 const songKey = (s: Song) => `${s.artist.trim().toLowerCase()}|${s.title.trim().toLowerCase()}`;
+
+/** Werte, die nie aus settings.json kommen: Identität und Stand der letzten Sicherung. */
+const NON_IMPORTED_SETTINGS = new Set<keyof AppSettings>(['userId', 'userName', 'lastBackupAt']);
+
+const ENUM_SETTINGS: Partial<Record<keyof AppSettings, readonly string[]>> = {
+  tapZoneSize: ['LOWER_THIRD', 'LOWER_HALF', 'FULL_HEIGHT'],
+  themeMode: ['SYSTEM', 'LIGHT', 'DARK'],
+};
+
+/**
+ * Übernimmt die Einstellungen aus einer Sicherung in [current].
+ *
+ * Nur bekannte Schlüssel mit passendem Typ; unbekannte Werte (etwa ein neuer Modus aus
+ * einer neueren Version) lassen die aktuelle Einstellung stehen – wie toAppSettings in der
+ * Android-App. Identität (userId/userName) bleibt unberührt, die regelt die Frage
+ * „Bist du diese Person?“.
+ */
+export function applyBackupSettings(current: AppSettings, backup: SerializableAppSettings | null): AppSettings {
+  if (!backup || typeof backup !== 'object') return current;
+  const result: AppSettings = { ...current };
+  for (const key of Object.keys(current) as (keyof AppSettings)[]) {
+    if (NON_IMPORTED_SETTINGS.has(key)) continue;
+    const value = (backup as Record<string, unknown>)[key];
+    if (value === undefined || typeof value !== typeof current[key]) continue;
+    const allowed = ENUM_SETTINGS[key];
+    if (allowed && !allowed.includes(value as string)) continue;
+    (result as any)[key] = value;
+  }
+  return result;
+}
 
 async function readJson(zip: JSZip, name: string): Promise<any> {
   const entry = zip.file(name);

@@ -18,10 +18,12 @@
     filterAndSortSetlists,
     formatSetlistDate,
     nextUpcomingSetlist,
+    reassignNoteAuthor,
+    rewireSetlist,
   } from './lib/logic/songLogic';
   import { migrateLegacyNote, toInt, scoreDarkModeOf } from './lib/logic/serialization';
   import { createFullBackupZip, createSetlistBackupZip, generateBackupFilename } from './lib/logic/backupLogic';
-  import { analyzeBackupFile, type BackupAnalysisResult } from './lib/logic/backupImportLogic';
+  import { analyzeBackupFile, applyBackupSettings, type BackupAnalysisResult } from './lib/logic/backupImportLogic';
   import SelfTest from './routes/SelfTest.svelte';
   import NoteAuthorLabel from './lib/components/NoteAuthorLabel.svelte';
   import AlphabetIndex from './lib/components/AlphabetIndex.svelte';
@@ -529,9 +531,14 @@
 
     try {
       const analysis = backupAnalysis;
+      const previousUserId = settings.userId;
 
       let activeSettings = settings;
-      if (analysis.adoptAuthorIdentity && analysis.manifest.authorId) {
+      if (analysis.importSettings) {
+        activeSettings = applyBackupSettings(activeSettings, analysis.settingsInBackup);
+      }
+      const adoptIdentity = analysis.adoptAuthorIdentity && !!analysis.manifest.authorId;
+      if (adoptIdentity) {
         activeSettings = { ...activeSettings, userId: analysis.manifest.authorId, userName: analysis.manifest.authorName || activeSettings.userName };
       }
       const backupName = (analysis.settingsInBackup as any)?.userName || analysis.manifest.authorName || '';
@@ -595,15 +602,22 @@
         idMap.set(backupSong.id, finalSong.id);
       }
 
+      // Bisher hier geschriebene Notizen wandern mit auf die übernommene id, damit sie
+      // die eigenen bleiben (wie reassignNoteAuthor in der Android-App).
+      const finalSongs = adoptIdentity
+        ? reassignNoteAuthor(updatedSongs, previousUserId, activeSettings.userId)
+        : updatedSongs;
+
+      const availableSongIds = new Set(finalSongs.map(s => s.id));
       for (const sItem of analysis.setlists) {
         if (!sItem.importSetlist) continue;
-        const s = { ...sItem.backupSetlist, songIds: sItem.backupSetlist.songIds.map(id => idMap.get(id) ?? id) };
+        const s = rewireSetlist(sItem.backupSetlist, idMap, availableSongIds);
         const existingIdx = updatedSetlists.findIndex(set => set.id === s.id || (sItem.localSetlist && set.id === sItem.localSetlist.id));
         if (existingIdx >= 0) updatedSetlists[existingIdx] = s;
         else updatedSetlists.push(s);
       }
 
-      songs = updatedSongs;
+      songs = finalSongs;
       setlists = updatedSetlists;
       await saveSongsDB($state.snapshot(songs) as Song[]);
       await saveSetlistsDB($state.snapshot(setlists) as Setlist[]);
@@ -831,6 +845,13 @@
           <label style="background: var(--bg-surface-secondary); padding: 12px; border-radius: 8px; display: flex; gap: 12px; align-items: center; cursor: pointer;">
             <input type="checkbox" bind:checked={backupAnalysis.adoptAuthorIdentity} />
             <span>Identität von <strong>{backupAnalysis.manifest.authorName}</strong> übernehmen (Notizen bleiben den eigenen zugeordnet)</span>
+          </label>
+        {/if}
+
+        {#if backupAnalysis.settingsInBackup}
+          <label style="background: var(--bg-surface-secondary); padding: 12px; border-radius: 8px; display: flex; gap: 12px; align-items: center; cursor: pointer;">
+            <input type="checkbox" bind:checked={backupAnalysis.importSettings} />
+            <span>Einstellungen aus der Sicherung übernehmen</span>
           </label>
         {/if}
 

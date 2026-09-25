@@ -7,6 +7,16 @@ import java.util.*
 
 object BackupLogic {
 
+    /**
+     * Newest backup format this version can read. A newer backup is refused rather than
+     * read half: `ignoreUnknownKeys` would otherwise drop whatever the new format added
+     * without a word.
+     */
+    const val SUPPORTED_FORMAT_VERSION = 1
+
+    fun isFormatSupported(manifest: BackupManifest): Boolean =
+        manifest.formatVersion <= SUPPORTED_FORMAT_VERSION
+
     fun generateBackupFilename(
         type: BackupType,
         setlistTitle: String? = null,
@@ -43,6 +53,7 @@ object BackupLogic {
         val missingFiles = mutableListOf<String>()
         val localSongsByHash = localSongs.filter { it.fileHash.isNotBlank() }.associateBy { it.fileHash }
         val localSongsByKey = localSongs.associateBy { "${it.artist.lowercase()}|${it.title.lowercase()}" }
+        val localSongsById = localSongs.associateBy { it.id }
 
         val songItems = backupSongs.map { backupSong ->
             val scoreFile = if (backupSong.hasFile && backupSong.fileUri.isNotBlank()) {
@@ -59,7 +70,10 @@ object BackupLogic {
 
             val matchedByHash = if (computedHash.isNotBlank()) localSongsByHash[computedHash] else null
             val songKey = "${backupSong.artist.lowercase()}|${backupSong.title.lowercase()}"
-            val matchedByKey = localSongsByKey[songKey]
+            // Same id as a local song, but neither file nor title match any more (e.g. a
+            // shared setlist edited on both sides): still the same song. Treating it as
+            // new would overwrite the local one without asking.
+            val matchedByKey = localSongsByKey[songKey] ?: localSongsById[backupSong.id]
 
             val (category, localSong, action) = when {
                 matchedByHash != null -> {
@@ -110,11 +124,82 @@ object BackupLogic {
         }
     }
 
+    /**
+     * The song that „Sicherung übernehmen“ leaves in the collection.
+     *
+     * - Keeps the id of the matched [localSong], so the local song is replaced instead of
+     *   duplicated and every setlist pointing at it stays intact.
+     * - Merges the notes: per author the newer one wins, as everywhere else. Local notes
+     *   written after the backup was made are not lost.
+     * - [importedFileUri] is empty when the score could not be copied from the backup;
+     *   then the local file stays in place instead of the song ending up without one.
+     */
+    fun takeBackupSong(backupSong: Song, localSong: Song?, importedFileUri: String): Song {
+        val base = backupSong.copy(
+            id = localSong?.id ?: backupSong.id,
+            notes = localSong?.notes.orEmpty().mergedWith(backupSong.notes),
+        )
+        return when {
+            importedFileUri.isNotBlank() -> base.copy(fileUri = importedFileUri)
+            localSong != null && localSong.hasFile -> base.copy(
+                fileUri = localSong.fileUri,
+                sourceType = localSong.sourceType,
+                fileHash = localSong.fileHash,
+                // Zoom and pan belong to the file that is actually shown.
+                pageViews = localSong.pageViews,
+            )
+            // No score anywhere: what is left is the text, so show it as a text song.
+            backupSong.sourceType == SongSource.PDF || backupSong.sourceType == SongSource.MUSIC_XML ->
+                base.copy(fileUri = "", sourceType = SongSource.TEXT, fileHash = "")
+            else -> base.copy(fileUri = "")
+        }
+    }
+
+    /**
+     * Local songs whose score file nobody references after the import, so it can go.
+     *
+     * Deleting only at the end, and only what is unreferenced, means a failed copy or a
+     * file that was overwritten in place (same id, same extension) never loses a score.
+     */
+    fun orphanedSongFiles(localSongs: List<Song>, finalSongs: List<Song>): List<Song> {
+        val stillUsed = finalSongs.filter { it.hasFile }.map { it.fileUri }.toSet()
+        return localSongs.filter { it.hasFile && it.fileUri !in stillUsed }
+    }
+
+    /**
+     * Points a setlist from the backup at the songs as they are after the import.
+     *
+     * Ids of songs that end up nowhere (a new song that was skipped) are dropped, so the
+     * setlist does not carry references to songs that do not exist.
+     */
     fun computeRewiredSetlistIds(
         backupToLocalSongIdMap: Map<String, String>,
         setlistSongIds: List<String>,
+        availableSongIds: Set<String>,
     ): List<String> {
-        return setlistSongIds.mapNotNull { backupToLocalSongIdMap[it] ?: it }
+        return setlistSongIds.mapNotNull { id ->
+            (backupToLocalSongIdMap[id] ?: id).takeIf { it in availableSongIds }
+        }
+    }
+
+    /**
+     * [setlist] with its songs and its resume position rewired like
+     * [computeRewiredSetlistIds]. A position on a song that is gone is reset.
+     */
+    fun rewireSetlist(
+        setlist: Setlist,
+        backupToLocalSongIdMap: Map<String, String>,
+        availableSongIds: Set<String>,
+    ): Setlist {
+        val songIds = computeRewiredSetlistIds(backupToLocalSongIdMap, setlist.songIds, availableSongIds)
+        val lastSongId = setlist.lastSongId
+            ?.let { backupToLocalSongIdMap[it] ?: it }
+            ?.takeIf { it in songIds }
+        return setlist.copy(
+            songIds = songIds,
+            lastSongId = lastSongId,
+            lastPage = if (lastSongId == null) 0 else setlist.lastPage,
+        )
     }
 
     /**

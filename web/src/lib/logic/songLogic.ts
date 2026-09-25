@@ -184,6 +184,46 @@ export function mergeNotes(localNotes: SongNote[], incomingNotes: SongNote[]): S
   return Array.from(map.values());
 }
 
+/**
+ * Schreibt die Notizen der bisherigen Geräte-id [oldUserId] auf [newUserId] um.
+ *
+ * Wird gebraucht, wenn dieses Gerät die Identität aus einer Sicherung übernimmt: Was hier
+ * vorher geschrieben wurde, bleibt die eigene Notiz. Haben beide ids eine Notiz am selben
+ * Lied, gewinnt die neuere – wie in mergeNotes. Entspricht BackupLogic.reassignNoteAuthor
+ * in der Android-App.
+ */
+export function reassignNoteAuthor(songs: Song[], oldUserId: string, newUserId: string): Song[] {
+  if (!oldUserId || oldUserId === newUserId) return songs;
+  return songs.map(song => {
+    if (!song.notes.some(n => n.authorId === oldUserId)) return song;
+    const others = song.notes.filter(n => n.authorId !== oldUserId);
+    const moved = song.notes
+      .filter(n => n.authorId === oldUserId)
+      .map(n => ({ ...n, authorId: newUserId }));
+    return { ...song, notes: mergeNotes(others, moved) };
+  });
+}
+
+/**
+ * Richtet eine Setlist aus der Sicherung auf die Lieder nach dem Import aus.
+ *
+ * ids von Liedern, die es danach nicht gibt (ein übersprungenes neues Lied), fallen weg;
+ * eine Fortsetzungsposition auf so einem Lied wird zurückgesetzt. Entspricht
+ * BackupLogic.rewireSetlist in der Android-App.
+ */
+export function rewireSetlist(
+  setlist: Setlist,
+  idMap: Map<string, string>,
+  availableSongIds: Set<string>
+): Setlist {
+  const songIds = setlist.songIds
+    .map(id => idMap.get(id) ?? id)
+    .filter(id => availableSongIds.has(id));
+  const mappedLast = setlist.lastSongId ? (idMap.get(setlist.lastSongId) ?? setlist.lastSongId) : null;
+  const lastSongId = mappedLast && songIds.includes(mappedLast) ? mappedLast : null;
+  return { ...setlist, songIds, lastSongId, lastPage: lastSongId === null ? 0 : setlist.lastPage };
+}
+
 export function possessiveName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return 'Meine';

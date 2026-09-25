@@ -10,6 +10,7 @@ import de.workflow42.meinenoten.model.SongComparisonItem
 import de.workflow42.meinenoten.model.SongImportAction
 import de.workflow42.meinenoten.model.SongMatchCategory
 import de.workflow42.meinenoten.model.SongNote
+import de.workflow42.meinenoten.model.SongSource
 import org.junit.Assert.*
 import org.junit.Test
 import java.nio.file.Files
@@ -85,9 +86,110 @@ class BackupLogicTest {
         )
         val setlistSongIds = listOf("backup-id-1", "backup-id-2", "backup-id-3")
 
-        val rewired = BackupLogic.computeRewiredSetlistIds(map, setlistSongIds)
+        val rewired = BackupLogic.computeRewiredSetlistIds(
+            map,
+            setlistSongIds,
+            availableSongIds = setOf("local-id-1", "local-id-2", "backup-id-3"),
+        )
 
         assertEquals(listOf("local-id-1", "local-id-2", "backup-id-3"), rewired)
+    }
+
+    @Test
+    fun `rewired setlist drops songs that do not exist after the import`() {
+        val map = mapOf("backup-id-1" to "local-id-1")
+        val setlist = Setlist(
+            id = "s1",
+            title = "Gottesdienst",
+            songIds = listOf("backup-id-1", "skipped-new"),
+            lastSongId = "skipped-new",
+            lastPage = 3,
+        )
+
+        val rewired = BackupLogic.rewireSetlist(setlist, map, availableSongIds = setOf("local-id-1"))
+
+        assertEquals(listOf("local-id-1"), rewired.songIds)
+        assertEquals(null, rewired.lastSongId)
+        assertEquals(0, rewired.lastPage)
+    }
+
+    @Test
+    fun `newer backup format is not supported`() {
+        assertEquals(true, BackupLogic.isFormatSupported(BackupManifest(formatVersion = 1)))
+        assertEquals(false, BackupLogic.isFormatSupported(BackupManifest(formatVersion = 2)))
+    }
+
+    @Test
+    fun `same id but different title and file is matched, not treated as new`() {
+        val tempDir = Files.createTempDirectory("backup_test").toFile()
+        val local = Song(id = "same", title = "Alt", fileUri = "", fileHash = "h1")
+        val backup = Song(id = "same", title = "Neu", fileUri = "", fileHash = "h2")
+
+        val (items, _) = BackupLogic.analyzeBackupSongs(listOf(backup), listOf(local), tempDir)
+
+        assertEquals(SongMatchCategory.POSSIBLE_OTHER_VERSION, items.single().category)
+        assertEquals("same", items.single().localSong?.id)
+        assertEquals(SongImportAction.KEEP_OWN, items.single().action)
+        tempDir.deleteRecursively()
+    }
+
+    @Test
+    fun `take backup keeps the local id and merges notes`() {
+        val local = Song(
+            id = "local", title = "Lied", fileUri = "file:///local.pdf",
+            notes = listOf(
+                SongNote(authorId = "me", text = "neuer lokal", editedAt = 20),
+                SongNote(authorId = "anna", text = "alt", editedAt = 1),
+            ),
+        )
+        val backup = Song(
+            id = "backup", title = "Lied", fileUri = "files/backup.pdf",
+            notes = listOf(
+                SongNote(authorId = "me", text = "älter", editedAt = 10),
+                SongNote(authorId = "anna", text = "neu", editedAt = 5),
+            ),
+        )
+
+        val result = BackupLogic.takeBackupSong(backup, local, importedFileUri = "file:///new.pdf")
+
+        assertEquals("local", result.id)
+        assertEquals("file:///new.pdf", result.fileUri)
+        assertEquals("neuer lokal", result.notes.first { it.authorId == "me" }.text)
+        assertEquals("neu", result.notes.first { it.authorId == "anna" }.text)
+    }
+
+    @Test
+    fun `take backup without score in the backup keeps the local file`() {
+        val local = Song(id = "local", title = "Lied", fileUri = "file:///local.pdf", fileHash = "h")
+        val backup = Song(id = "backup", title = "Lied neu", fileUri = "files/missing.pdf", fileHash = "x")
+
+        val result = BackupLogic.takeBackupSong(backup, local, importedFileUri = "")
+
+        assertEquals("file:///local.pdf", result.fileUri)
+        assertEquals("h", result.fileHash)
+        assertEquals("Lied neu", result.title)
+    }
+
+    @Test
+    fun `take backup without any score becomes a text song`() {
+        val backup = Song(id = "backup", title = "Lied", fileUri = "files/missing.pdf", sourceType = SongSource.PDF)
+
+        val result = BackupLogic.takeBackupSong(backup, localSong = null, importedFileUri = "")
+
+        assertEquals("", result.fileUri)
+        assertEquals(SongSource.TEXT, result.sourceType)
+    }
+
+    @Test
+    fun `only unreferenced local files are orphaned`() {
+        val kept = Song(id = "a", title = "A", fileUri = "file:///a.pdf")
+        val replacedInPlace = Song(id = "b", title = "B", fileUri = "file:///b.pdf")
+        val replacedByOther = Song(id = "c", title = "C", fileUri = "file:///c.pdf")
+        val final = listOf(kept, replacedInPlace.copy(title = "B2"), replacedByOther.copy(fileUri = "file:///c.xml"))
+
+        val orphans = BackupLogic.orphanedSongFiles(listOf(kept, replacedInPlace, replacedByOther), final)
+
+        assertEquals(listOf("c"), orphans.map { it.id })
     }
 
     private fun song(id: String, title: String = id) = Song(id = id, title = title, fileUri = "")

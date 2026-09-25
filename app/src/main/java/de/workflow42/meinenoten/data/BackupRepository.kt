@@ -189,13 +189,15 @@ class BackupRepository(private val context: Context, private val songRepository:
     ): BackupAnalysisResult {
         val tempDir = File(context.cacheDir, "backup_temp_${UUID.randomUUID()}")
         if (!tempDir.exists()) tempDir.mkdirs()
+        // Trailing separator: without it a sibling such as "backup_temp_<id>x/" would pass.
+        val tempDirPrefix = tempDir.canonicalPath + File.separator
 
         try {
             ZipInputStream(BufferedInputStream(inputStream)).use { zipIn ->
                 var entry = zipIn.nextEntry
                 while (entry != null) {
                     val destFile = File(tempDir, entry.name)
-                    if (!destFile.canonicalPath.startsWith(tempDir.canonicalPath)) {
+                    if (!destFile.canonicalPath.startsWith(tempDirPrefix)) {
                         throw SecurityException("ZIP Entry outside target directory")
                     }
                     if (entry.isDirectory) {
@@ -215,6 +217,11 @@ class BackupRepository(private val context: Context, private val songRepository:
             }
 
             val manifest = json.decodeFromString<BackupManifest>(manifestFile.readText())
+            if (!BackupLogic.isFormatSupported(manifest)) {
+                throw IllegalArgumentException(
+                    context.getString(R.string.error_backup_format_too_new, manifest.formatVersion)
+                )
+            }
 
             val backupSongsFile = File(tempDir, "songs.json")
             val backupSongs = if (backupSongsFile.exists()) {
@@ -269,10 +276,13 @@ class BackupRepository(private val context: Context, private val songRepository:
         val updatedSongs = if (replaceAll) mutableListOf() else localSongs.toMutableList()
         val updatedSetlists = if (replaceAll) mutableListOf() else localSetlists.toMutableList()
         val backupToLocalSongIdMap = mutableMapOf<String, String>()
+        // Ids taken by songs from this import, so two backup songs matched to the same
+        // local song cannot end up under one id and replace each other.
+        val takenIds = mutableSetOf<String>()
 
-        if (replaceAll) {
-            localSongs.forEach { songRepository.deleteSongFile(it) }
-        }
+        // Files are no longer deleted up front, not even for "replace all": a score that
+        // fails to copy from the backup falls back to the local file, which must still
+        // exist. Unreferenced files are removed once the new list is saved.
 
         val totalSongs = analysis.songs.size
         var currentIndex = 0
@@ -287,7 +297,7 @@ class BackupRepository(private val context: Context, private val songRepository:
                     if (local != null) {
                         var finalSong = local
                         if (item.mergeForeignNotes) {
-                            val mergedNotes = mergeNotesList(local.notes, backupSong.notes)
+                            val mergedNotes = local.notes.mergedWith(backupSong.notes)
                             finalSong = local.copy(notes = mergedNotes)
                             val idx = updatedSongs.indexOfFirst { it.id == local.id }
                             if (idx >= 0) updatedSongs[idx] = finalSong
@@ -296,18 +306,21 @@ class BackupRepository(private val context: Context, private val songRepository:
                     }
                 }
                 SongImportAction.TAKE_BACKUP -> {
-                    val importedFileUri = copyBackupScoreToStorage(analysis.tempDir, backupSong)
-                    val newSong = backupSong.copy(
-                        fileUri = importedFileUri,
-                    )
-                    val existingIdx = updatedSongs.indexOfFirst { it.id == backupSong.id }
+                    val targetLocal = item.localSong?.takeIf { it.id !in takenIds }
+                    val targetId = targetLocal?.id
+                        ?: backupSong.id.takeIf { it !in takenIds }
+                        ?: UUID.randomUUID().toString()
+                    val importedFileUri = copyBackupScoreToStorage(analysis.tempDir, backupSong, overrideId = targetId)
+                    val newSong = BackupLogic.takeBackupSong(backupSong, targetLocal, importedFileUri)
+                        .copy(id = targetId)
+                    val existingIdx = updatedSongs.indexOfFirst { it.id == targetId }
                     if (existingIdx >= 0) {
-                        songRepository.deleteSongFile(updatedSongs[existingIdx])
                         updatedSongs[existingIdx] = newSong
                     } else {
                         updatedSongs.add(newSong)
                     }
-                    backupToLocalSongIdMap[backupSong.id] = newSong.id
+                    takenIds += targetId
+                    backupToLocalSongIdMap[backupSong.id] = targetId
                 }
                 SongImportAction.KEEP_BOTH -> {
                     val newId = UUID.randomUUID().toString()
@@ -325,6 +338,7 @@ class BackupRepository(private val context: Context, private val songRepository:
                         fileUri = importedFileUri,
                     )
                     updatedSongs.add(newSong)
+                    takenIds += newId
                     backupToLocalSongIdMap[backupSong.id] = newId
                 }
                 SongImportAction.SKIP -> {
@@ -335,13 +349,16 @@ class BackupRepository(private val context: Context, private val songRepository:
             }
         }
 
+        val availableSongIds = updatedSongs.map { it.id }.toSet()
         analysis.setlists.forEach { setlistItem ->
             if (setlistItem.importSetlist) {
                 val setlist = setlistItem.backupSetlist
-                val rewiredSongIds = BackupLogic.computeRewiredSetlistIds(backupToLocalSongIdMap, setlist.songIds)
-                val newSetlist = setlist.copy(songIds = rewiredSongIds)
+                val newSetlist = BackupLogic.rewireSetlist(setlist, backupToLocalSongIdMap, availableSongIds)
 
-                val existingIdx = updatedSetlists.indexOfFirst { it.id == setlist.id || (it.title == setlist.title && it.date == setlist.date) }
+                // Same match as in the comparison screen, so a setlist shown there as
+                // existing is replaced and not added a second time.
+                val localId = setlistItem.localSetlist?.id
+                val existingIdx = updatedSetlists.indexOfFirst { it.id == setlist.id || it.id == localId }
                 if (existingIdx >= 0) {
                     updatedSetlists[existingIdx] = newSetlist
                 } else {
@@ -352,6 +369,10 @@ class BackupRepository(private val context: Context, private val songRepository:
 
         onSaveSongs(updatedSongs)
         onSaveSetlists(updatedSetlists)
+
+        // Only after the new list is saved: a crash before this point leaves the old
+        // files in place rather than songs pointing at deleted ones.
+        BackupLogic.orphanedSongFiles(localSongs, updatedSongs).forEach { songRepository.deleteSongFile(it) }
 
         var newSettings = currentSettings
         if (analysis.importSettings && analysis.settingsInBackup != null) {
@@ -431,23 +452,18 @@ class BackupRepository(private val context: Context, private val songRepository:
         if (!targetDir.exists()) targetDir.mkdirs()
 
         val destFile = File(targetDir, "$songId.$ext")
-        srcFile.copyTo(destFile, overwrite = true)
-        return destFile.toUri().toString()
-    }
-
-    private fun mergeNotesList(localNotes: List<SongNote>, foreignNotes: List<SongNote>): List<SongNote> {
-        val result = localNotes.toMutableList()
-        foreignNotes.forEach { foreign ->
-            val idx = result.indexOfFirst { it.authorId == foreign.authorId }
-            if (idx >= 0) {
-                if (foreign.editedAt > result[idx].editedAt) {
-                    result[idx] = foreign
-                }
-            } else {
-                result.add(foreign)
-            }
+        // Copy next to the target first: the target may be the current local score
+        // (same id, same extension), which must survive a copy that fails halfway.
+        val partFile = File(targetDir, "$songId.$ext.part")
+        return runCatching {
+            srcFile.copyTo(partFile, overwrite = true)
+            if (destFile.exists()) destFile.delete()
+            check(partFile.renameTo(destFile)) { "rename failed" }
+            destFile.toUri().toString()
+        }.getOrElse {
+            partFile.delete()
+            ""
         }
-        return result
     }
 
     private fun getAppVersion(): String {

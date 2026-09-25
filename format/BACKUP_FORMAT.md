@@ -48,7 +48,8 @@ die nicht abwärtskompatibel sind, erhöhen die `formatVersion` im `manifest.jso
 }
 ```
 
-- `formatVersion`: Ganzzahl (`1`).
+- `formatVersion`: Ganzzahl (`1`). Beide Apps lehnen eine Sicherung mit höherer
+  `formatVersion` ab, statt sie unvollständig einzulesen.
 - `type`: `"KOMPLETT"` (Vollständige Sicherung) oder `"SETLIST"` (Teilsicherung einer Setlist).
 - `createdAt`: Epoch-Millisekunden als Zahl.
 - `authorId`: UUID des Autors (wird beim Einlesen einer Komplettsicherung auf Wunsch übernommen).
