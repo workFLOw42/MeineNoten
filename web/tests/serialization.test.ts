@@ -1,0 +1,106 @@
+import { describe, it, expect } from 'vitest';
+import JSZip from 'jszip';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { songFromJson, songToJson, migrateLegacyNote, sha256Hex } from '../src/lib/logic/serialization';
+import { analyzeBackupFile } from '../src/lib/logic/backupImportLogic';
+import { createFullBackupZip } from '../src/lib/logic/backupLogic';
+import type { AppSettings, Song } from '../src/lib/model/types';
+
+const sample = (name: string) => readFileSync(resolve(__dirname, '../../format/samples', name));
+
+describe('songFromJson', () => {
+  it('fills defaults for fields Android omits', () => {
+    const song = songFromJson({ id: 's1', title: 'Nur Titel', fileUri: '' });
+    expect(song.artist).toBe('');
+    expect(song.version).toBe('');
+    expect(song.genre).toBe('');
+    expect(song.bpm).toBe(120);
+    expect(song.timeSignature).toBe('4/4');
+    expect(song.sourceType).toBe('PDF');
+    expect(song.notes).toEqual([]);
+    expect(song.pageViews).toEqual({});
+  });
+
+  it('maps Android field names: notes = legacy text, songNotes = per-person list', () => {
+    const song = songFromJson({
+      id: 's1', title: 't', fileUri: '',
+      notes: 'Alte Notiz',
+      songNotes: [{ authorId: 'a', authorName: 'Anna', text: 'Capo 1', editedAt: 5 }],
+    });
+    expect(song.legacyNotes).toBe('Alte Notiz');
+    expect(song.notes).toEqual([{ authorId: 'a', authorName: 'Anna', text: 'Capo 1', editedAt: 5 }]);
+  });
+
+  it('keeps unknown fields for round trips', () => {
+    const song = songFromJson({ id: 's1', title: 't', fileUri: '', futureField: 42 }) as Song & { futureField?: number };
+    expect(song.futureField).toBe(42);
+    expect(songToJson(song).futureField).toBe(42);
+  });
+
+  it('writes Android field names back', () => {
+    const json = songToJson(songFromJson({ id: 's1', title: 't', fileUri: '', songNotes: [{ authorId: 'a', text: 'x' }] }));
+    expect(Array.isArray(json.songNotes)).toBe(true);
+    expect(json.notes).toBe('');
+  });
+});
+
+describe('migrateLegacyNote', () => {
+  it('turns legacy text into own note, never overwrites an existing own note', () => {
+    const legacy = songFromJson({ id: 's', title: 't', fileUri: '', notes: 'Alt' });
+    expect(migrateLegacyNote(legacy, 'me', 'Ich').notes).toEqual([{ authorId: 'me', authorName: 'Ich', text: 'Alt', editedAt: 0 }]);
+
+    const withOwn = songFromJson({ id: 's', title: 't', fileUri: '', notes: 'Alt', songNotes: [{ authorId: 'me', text: 'Neu' }] });
+    expect(migrateLegacyNote(withOwn, 'me', 'Ich').notes.map(n => n.text)).toEqual(['Neu']);
+  });
+});
+
+describe('analyzeBackupFile with sample ZIPs', () => {
+  for (const name of ['komplett_minimal.zip', 'setlist.zip', 'notizen_personen.zip', 'alt_formatVersion1_einzelnotiz.zip']) {
+    it(`reads ${name} without errors`, async () => {
+      const result = await analyzeBackupFile(sample(name).buffer as ArrayBuffer, [], []);
+      expect(result.songs.length).toBeGreaterThan(0);
+      for (const item of result.songs) {
+        expect(typeof item.backupSong.artist).toBe('string');
+        expect(item.category).toBe('NEW');
+      }
+    });
+  }
+
+  it('reads per-person notes from notizen_personen.zip', async () => {
+    const result = await analyzeBackupFile(sample('notizen_personen.zip').buffer as ArrayBuffer, [], []);
+    expect(result.songs[0].backupSong.notes).toHaveLength(3);
+  });
+
+  it('detects the score file in komplett_minimal.zip', async () => {
+    const result = await analyzeBackupFile(sample('komplett_minimal.zip').buffer as ArrayBuffer, [], []);
+    expect(result.songs[0].scoreFileInBackup).toBe(true);
+  });
+
+  it('matches an existing local song by artist and title', async () => {
+    const local = songFromJson({ id: 'local', title: 'Beispiel-Lied', artist: 'Test Artist', fileUri: '' });
+    const result = await analyzeBackupFile(sample('komplett_minimal.zip').buffer as ArrayBuffer, [local], []);
+    expect(result.songs[0].category).toBe('POSSIBLE_OTHER_VERSION');
+    expect(result.songs[0].action).toBe('KEEP_OWN');
+  });
+});
+
+describe('export → import round trip', () => {
+  it('re-imports its own backup with file, hash and notes', async () => {
+    const pdf = new TextEncoder().encode('%PDF-1.4 test');
+    const song = songFromJson({
+      id: 'song-x', title: 'Lied', artist: 'A', fileUri: 'opfs://songs/song-x.pdf',
+      songNotes: [{ authorId: 'me', authorName: 'Ich', text: 'Capo 2', editedAt: 1 }],
+    });
+    const settings = { userId: 'me', userName: 'Ich' } as AppSettings;
+    const blob = await createFullBackupZip([song], [], settings, async () => new File([pdf], 'song-x.pdf'));
+
+    const result = await analyzeBackupFile(await blob.arrayBuffer(), [], []);
+    const imported = result.songs[0];
+    expect(imported.scoreFileInBackup).toBe(true);
+    expect(imported.backupSong.fileUri).toBe('files/song-x.pdf');
+    expect(imported.backupSong.fileHash).toBe(await sha256Hex(pdf.buffer as ArrayBuffer));
+    expect(imported.backupSong.notes[0].text).toBe('Capo 2');
+    expect(result.manifest.fileHashes['files/song-x.pdf']).toBe(imported.backupSong.fileHash);
+  });
+});

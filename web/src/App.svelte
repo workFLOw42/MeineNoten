@@ -4,7 +4,8 @@
   import { loadSongsDB, saveSongsDB, loadSetlistsDB, saveSetlistsDB, loadSettingsDB, saveSettingsDB, saveScoreFile, loadScoreFile } from './lib/storage/db';
   import { loadPdfDocument, renderPdfPageToCanvas } from './lib/pdf/pdfRenderer';
   import { renderMusicXml } from './lib/musicxml/osmdRenderer';
-  import { matchesQuery, sortSongs, possessiveName } from './lib/logic/songLogic';
+  import { matchesQuery, sortSongs, possessiveName, mergeNotes } from './lib/logic/songLogic';
+  import { migrateLegacyNote } from './lib/logic/serialization';
   import { createFullBackupZip, generateBackupFilename } from './lib/logic/backupLogic';
   import { analyzeBackupFile, type BackupAnalysisResult } from './lib/logic/backupImportLogic';
   import SelfTest from './routes/SelfTest.svelte';
@@ -155,62 +156,85 @@
   async function applyBackupImport() {
     if (!backupAnalysis || !settings) return;
 
-    const updatedSongs = [...songs];
-    const updatedSetlists = [...setlists];
+    try {
+      const analysis = backupAnalysis;
 
-    for (const item of backupAnalysis.songs) {
-      if (item.action === 'TAKE_BACKUP' || item.action === 'KEEP_BOTH') {
-        const backupSong = item.backupSong;
-        const zipFileEntry = backupAnalysis.zipFiles[backupSong.fileUri];
+      // Identität zuerst übernehmen, damit alte Einzelnotizen der richtigen Person zugeordnet werden
+      let activeSettings = settings;
+      if (analysis.adoptAuthorIdentity && analysis.manifest.authorId) {
+        activeSettings = { ...settings, userId: analysis.manifest.authorId, userName: analysis.manifest.authorName || settings.userName };
+        settings = activeSettings;
+        await saveSettingsDB(activeSettings);
+      }
+
+      const updatedSongs = [...songs];
+      const updatedSetlists = [...setlists];
+
+      for (const item of analysis.songs) {
+        const backupSong = migrateLegacyNote(item.backupSong, activeSettings.userId, activeSettings.userName);
+
+        if (item.action === 'SKIP') continue;
+
+        if (item.action === 'KEEP_OWN') {
+          // Eigenes Lied bleibt, aber Notizen anderer Personen werden auf Wunsch ergänzt
+          if (item.localSong && item.mergeForeignNotes) {
+            const idx = updatedSongs.findIndex(s => s.id === item.localSong!.id);
+            if (idx >= 0) {
+              updatedSongs[idx] = { ...updatedSongs[idx], notes: mergeNotes(updatedSongs[idx].notes, backupSong.notes) };
+            }
+          }
+          continue;
+        }
+
+        // TAKE_BACKUP oder KEEP_BOTH
+        const newId = item.action === 'KEEP_BOTH' ? crypto.randomUUID() : (item.localSong?.id ?? backupSong.id);
+        let newFileUri = '';
+        const zipFileEntry = backupSong.fileUri ? analysis.zipFiles[backupSong.fileUri] : undefined;
         if (zipFileEntry) {
           const arrayBuffer = await zipFileEntry.async('arraybuffer');
           const ext = backupSong.fileUri.substring(backupSong.fileUri.lastIndexOf('.') + 1);
-          const newId = item.action === 'KEEP_BOTH' ? crypto.randomUUID() : backupSong.id;
-          const newFileUri = await saveScoreFile(newId, ext, arrayBuffer);
-
-          const finalSong: Song = {
-            ...backupSong,
-            id: newId,
-            fileUri: newFileUri,
-            version: item.action === 'KEEP_BOTH' ? `${backupSong.version} (Sicherung)` : backupSong.version,
-          };
-
-          const existingIdx = updatedSongs.findIndex(s => s.id === finalSong.id);
-          if (existingIdx >= 0) {
-            updatedSongs[existingIdx] = finalSong;
-          } else {
-            updatedSongs.push(finalSong);
-          }
+          newFileUri = await saveScoreFile(newId, ext, arrayBuffer);
+        } else if (item.action === 'TAKE_BACKUP' && item.localSong?.fileUri) {
+          // Sicherung ohne Datei (z. B. Setlist-Teilsicherung): vorhandene Datei behalten
+          newFileUri = item.localSong.fileUri;
         }
-      }
-    }
 
-    for (const sItem of backupAnalysis.setlists) {
-      if (sItem.importSetlist) {
+        const finalSong: Song = {
+          ...backupSong,
+          id: newId,
+          fileUri: newFileUri,
+          sourceType: newFileUri || backupSong.sourceType !== 'PDF' ? backupSong.sourceType : 'TEXT',
+          version: item.action === 'KEEP_BOTH' ? `${backupSong.version} (Sicherung)`.trim() : backupSong.version,
+          notes: item.localSong && item.action === 'TAKE_BACKUP'
+            ? mergeNotes(item.localSong.notes, backupSong.notes)
+            : backupSong.notes,
+        };
+
+        const existingIdx = updatedSongs.findIndex(s => s.id === finalSong.id);
+        if (existingIdx >= 0) updatedSongs[existingIdx] = finalSong;
+        else updatedSongs.push(finalSong);
+      }
+
+      for (const sItem of analysis.setlists) {
+        if (!sItem.importSetlist) continue;
         const s = sItem.backupSetlist;
-        const existingIdx = updatedSetlists.findIndex(set => set.id === s.id || set.title === s.title);
-        if (existingIdx >= 0) {
-          updatedSetlists[existingIdx] = s;
-        } else {
-          updatedSetlists.push(s);
-        }
+        const existingIdx = updatedSetlists.findIndex(set => set.id === s.id || (sItem.localSetlist && set.id === sItem.localSetlist.id));
+        if (existingIdx >= 0) updatedSetlists[existingIdx] = s;
+        else updatedSetlists.push(s);
       }
+
+      songs = updatedSongs;
+      setlists = updatedSetlists;
+      await saveSongsDB($state.snapshot(songs) as Song[]);
+      await saveSetlistsDB($state.snapshot(setlists) as Setlist[]);
+
+      alert('Sicherung erfolgreich eingelesen!');
+      route = 'songs';
+      backupAnalysis = null;
+    } catch (err: any) {
+      console.error(err);
+      alert(`Fehler beim Übernehmen der Sicherung: ${err?.message ?? err}`);
     }
-
-    songs = updatedSongs;
-    setlists = updatedSetlists;
-    await saveSongsDB(songs);
-    await saveSetlistsDB(setlists);
-
-    if (backupAnalysis.adoptAuthorIdentity && backupAnalysis.manifest.authorId) {
-      const updatedSettings = { ...settings, userId: backupAnalysis.manifest.authorId, userName: backupAnalysis.manifest.authorName || settings.userName };
-      settings = updatedSettings;
-      await saveSettingsDB(updatedSettings);
-    }
-
-    alert('Sicherung erfolgreich eingelesen!');
-    route = 'songs';
-    backupAnalysis = null;
   }
 
   async function renderCurrentPdfPage() {

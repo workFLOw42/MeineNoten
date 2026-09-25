@@ -72,6 +72,9 @@ export interface AppSettings {
   showCopyrightWarning: boolean;
 }
 
+/** Inhalt von settings.json: Einstellungen ohne Identität (userId/userName). */
+export type SerializableAppSettings = Partial<Omit<AppSettings, 'userId' | 'userName' | 'lastBackupAt'>>;
+
 export type BackupType = 'KOMPLETT' | 'SETLIST';
 
 export type SongMatchCategory = 'IDENTICAL' | 'SAME_FILE_DIFFERENT_METADATA' | 'POSSIBLE_OTHER_VERSION' | 'NEW';

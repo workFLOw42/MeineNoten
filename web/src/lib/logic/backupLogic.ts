@@ -1,5 +1,6 @@
 import type { Song, Setlist, AppSettings, BackupManifest, BackupType } from '../model/types';
 import JSZip from 'jszip';
+import { songToJson, sha256Hex } from './serialization';
 
 export function generateBackupFilename(
   type: BackupType,
@@ -22,44 +23,49 @@ export function sanitizeFilenamePart(part: string): string {
     .replace(/^-|-$/g, '');
 }
 
+/** Einstellungen ohne Identität (userId/userName gehören nicht in settings.json). */
+function serializableSettings(settings: AppSettings): Record<string, unknown> {
+  const { userId, userName, lastBackupAt, ...rest } = settings as AppSettings & { key?: string };
+  delete (rest as { key?: string }).key;
+  return rest;
+}
+
 export async function createFullBackupZip(
   songs: Song[],
   setlists: Setlist[],
   settings: AppSettings,
-  getScoreFile: (song: Song) => Promise<File | null>
+  getScoreFile: (fileUri: string) => Promise<File | null>
 ): Promise<Blob> {
   const zip = new JSZip();
-  const fileHashes: Record<string, string> =iccation => {};
-
-  const filesFolder = zip.folder('files');
-  const relativeSongs: Song[] = [];
+  const fileHashes: Record<string, string> = {};
+  const exportedSongs: Record<string, unknown>[] = [];
 
   for (const song of songs) {
-    let zipPath = song.fileUri;
-    if (song.hasFile) {
-      const file = await getScoreFile(song);
+    let exported: Song = { ...song, fileUri: '' };
+    if (song.fileUri) {
+      const file = await getScoreFile(song.fileUri);
       if (file) {
-        const ext = file.name.substring(file.name.lastIndexOf('.') + 1);
-        zipPath = `files/${song.id}.${ext}`;
-        const arrayBuffer = await file.arrayBuffer();
-        filesFolder?.file(`${song.id}.${ext}`, arrayBuffer, { compression: 'STORE' });
-
-        // Compute simple hash or use existing
-        fileHashes[zipPath] = song.fileHash || 'hash';
-        relativeSongs.push({ ...song, fileUri: zipPath });
-        continue;
+        const dot = file.name.lastIndexOf('.');
+        const ext = dot >= 0 ? file.name.substring(dot + 1).toLowerCase() : 'pdf';
+        const zipPath = `files/${song.id}.${ext}`;
+        const data = await file.arrayBuffer();
+        zip.file(zipPath, data, { compression: 'STORE' });
+        const hash = await sha256Hex(data);
+        fileHashes[zipPath] = hash;
+        exported = { ...song, fileUri: zipPath, fileHash: hash };
       }
     }
-    relativeSongs.push({ ...song, fileUri: '' });
+    exportedSongs.push(songToJson(exported));
   }
 
-  zip.file('songs.json', JSON.stringify(relativeSongs, null, 2));
-  zip.file('setlists.json', JSON.stringify(setlists, null, 2));
-  zip.file('settings.json', JSON.stringify(settings, null, 2));
+  const json = (v: unknown) => JSON.stringify(v, null, 2);
+  zip.file('songs.json', json(exportedSongs), { compression: 'DEFLATE' });
+  zip.file('setlists.json', json(setlists), { compression: 'DEFLATE' });
+  zip.file('settings.json', json(serializableSettings(settings)), { compression: 'DEFLATE' });
 
   const manifest: BackupManifest = {
     formatVersion: 1,
-    appVersion: '0.1.0',
+    appVersion: 'web-0.1.0',
     type: 'KOMPLETT',
     createdAt: Date.now(),
     deviceName: 'Browser',
@@ -68,7 +74,7 @@ export async function createFullBackupZip(
     title: 'Komplett',
     fileHashes,
   };
-  zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+  zip.file('manifest.json', json(manifest), { compression: 'DEFLATE' });
 
-  return await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+  return await zip.generateAsync({ type: 'blob' });
 }

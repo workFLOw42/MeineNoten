@@ -13,7 +13,7 @@
     { name: 'Web Share API', status: 'running', details: '' },
     { name: 'Standalone (Home Screen App)', status: 'running', details: '' },
     { name: 'PDF Renderer (pdf.js)', status: 'running', details: '' },
-    { name: 'Pedal / Keyboard Log', status: 'ok', details: 'Drücke Pedaltasten oder Tasten zum Testen' },
+    { name: 'Pedal / Keyboard Log', status: 'info', details: 'Drücke Pedaltasten oder Tasten zum Testen' },
   ]);
 
   let lastKey = $state('Keine Taste gedrückt');
@@ -105,7 +105,7 @@
 
   function handleKeyDown(e: KeyboardEvent) {
     lastKey = `Key: "${e.key}" | Code: "${e.code}" | Which: ${e.keyCode}`;
-    testResults[7].details = lastKey;
+    testResults[7] = { ...testResults[7], status: 'ok', details: lastKey };
   }
 
   function updateResult(index: number, status: Status, details: string) {

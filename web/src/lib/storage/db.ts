@@ -1,7 +1,16 @@
 import type { Song, Setlist, AppSettings } from '../model/types';
+import { songFromJson } from '../logic/serialization';
 
 const DB_NAME = 'meinenoten_db';
 const DB_VERSION = 1;
+
+/**
+ * Svelte-5-$state liefert Proxys, die IndexedDB nicht klonen kann (DataCloneError).
+ * Vor dem Speichern deshalb in ein reines Objekt umwandeln.
+ */
+function plain<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
 
 export async function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -80,7 +89,8 @@ export async function loadSongsDB(): Promise<Song[]> {
     const tx = db.transaction('songs', 'readonly');
     const store = tx.objectStore('songs');
     const request = store.getAll();
-    request.onsuccess = () => resolve(request.result || []);
+    // Durch songFromJson laufen lassen: repariert Läufe, die vor dem Fix unvollständig gespeichert wurden
+    request.onsuccess = () => resolve((request.result || []).map((s: any) => songFromJson(s)));
     request.onerror = () => reject(request.error);
   });
 }
@@ -91,7 +101,7 @@ export async function saveSongsDB(songs: Song[]): Promise<void> {
     const tx = db.transaction('songs', 'readwrite');
     const store = tx.objectStore('songs');
     store.clear();
-    songs.forEach(song => store.put(song));
+    songs.forEach(song => store.put(plain(song)));
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -114,7 +124,7 @@ export async function saveSetlistsDB(setlists: Setlist[]): Promise<void> {
     const tx = db.transaction('setlists', 'readwrite');
     const store = tx.objectStore('setlists');
     store.clear();
-    setlists.forEach(setlist => store.put(setlist));
+    setlists.forEach(setlist => store.put(plain(setlist)));
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -173,7 +183,7 @@ export async function saveSettingsDB(settings: AppSettings): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction('settings', 'readwrite');
     const store = tx.objectStore('settings');
-    store.put({ ...settings, key: 'app' });
+    store.put(plain({ ...settings, key: 'app' }));
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
