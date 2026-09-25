@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import type { PageView } from '../model/types';
   import { renderPdfPageFitted } from './pdfRenderer';
 
@@ -47,13 +47,17 @@
     oy = clamp(oy, -max, max);
   }
 
-  // Seitenwechsel oder neue Werte von außen übernehmen
+  // Gespeicherten Zoom nur beim Seitenwechsel übernehmen. Alles andere in untrack():
+  // sonst läuft der Effekt bei jeder Fingerbewegung erneut und setzt den Zoom zurück.
   $effect(() => {
     pageIndex;
-    scale = pageView?.scale ?? 1;
-    ox = pageView?.offsetXRatio ?? 0;
-    oy = pageView?.offsetYRatio ?? 0;
-    applyLimits();
+    pdfDoc;
+    untrack(() => {
+      scale = pageView?.scale ?? 1;
+      ox = pageView?.offsetXRatio ?? 0;
+      oy = pageView?.offsetYRatio ?? 0;
+      applyLimits();
+    });
   });
 
   async function render(zoom: number) {
@@ -66,10 +70,10 @@
     }
   }
 
-  // Neu zeichnen bei Seite/Größe; beim Zoomen erst nach der Geste (siehe commit)
+  // Neu zeichnen bei Seite/Größe; nach einer Zoom-Geste schärft commit() nach
   $effect(() => {
     pdfDoc; pageIndex; width; height;
-    render(Math.max(1, Math.round((pageView?.scale ?? 1) * 2) / 2));
+    untrack(() => render(Math.max(1, Math.round(scale * 2) / 2)));
   });
 
   onMount(() => {
