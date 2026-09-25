@@ -1,10 +1,12 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte'; // wait, svelte is imported correctly
+  import { onMount, onDestroy } from 'svelte';
   import { openDB } from '../lib/storage/db';
   import { loadPdfDocument, renderPdfPageToCanvas } from '../lib/pdf/pdfRenderer';
 
-  let testResults = $state<Array<{ name: string; status: 'ok' | 'fail' | 'running'; details: string }>>([
-    { name: 'Browser & UA', status: 'running', details: navigator.userAgent },
+  type Status = 'ok' | 'fail' | 'info' | 'running';
+
+  let testResults = $state<Array<{ name: string; status: Status; details: string }>>([
+    { name: 'Browser & UA', status: 'info', details: navigator.userAgent },
     { name: 'IndexedDB', status: 'running', details: '' },
     { name: 'OPFS (Origin Private File System)', status: 'running', details: '' },
     { name: 'Wake Lock API', status: 'running', details: '' },
@@ -65,19 +67,31 @@
 
     // 5. Standalone / Home screen
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
-    updateResult(5, isStandalone ? 'ok' : 'fail', isStandalone ? 'Läuft als Home-Bildschirm-App' : 'Läuft im Browser-Tab (nicht im Standalone-Modus)');
+    updateResult(
+      5,
+      isStandalone ? 'ok' : 'info',
+      isStandalone
+        ? 'Läuft als Home-Bildschirm-App'
+        : 'Läuft im Browser-Tab – funktioniert, für Vollbild auf dem iPad „Zum Home-Bildschirm“ hinzufügen'
+    );
 
     // 6. PDF Renderer
     try {
-      // Minimal valid PDF byte buffer for testing renderer
-      const pdfBytes = new Uint8Array([
-        37, 80, 68, 70, 45, 49, 46, 52, 10, 49, 32, 48, 32, 111, 98, 106, 10, 60, 60, 47, 84, 121, 112, 101, 47, 67,
-        97, 116, 97, 108, 111, 103, 47, 80, 97, 103, 101, 115, 32, 50, 32, 48, 32, 82, 62, 62, 10, 101, 110, 100, 111,
-        98, 106, 10, 116, 114, 97, 105, 108, 101, 114, 60, 60, 47, 82, 111, 111, 116, 32, 49, 32, 48, 32, 82, 62, 62,
-        10, 115, 116, 97, 114, 116, 120, 114, 101, 102, 10, 48, 10, 37, 37, 69, 79, 70
-      ]);
-      // Actually pdf.js needs a real minimal PDF or we test loading
-      updateResult(6, 'ok', 'pdf.js geladen');
+      // Echter Test: Mini-PDF laden und Seite 1 auf ein Canvas rendern
+      const pdfText =
+        '%PDF-1.4\n' +
+        '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
+        '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
+        '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 100]>>endobj\n' +
+        'trailer<</Root 1 0 R>>\n%%EOF';
+      const pdfBytes = new TextEncoder().encode(pdfText);
+      const started = performance.now();
+      const doc = await loadPdfDocument(pdfBytes.buffer);
+      const canvas = document.createElement('canvas');
+      await renderPdfPageToCanvas(doc, 1, canvas, 1.0);
+      const ms = Math.round(performance.now() - started);
+      updateResult(6, 'ok', `pdf.js ${doc.numPages} Seite gerendert (${canvas.width}×${canvas.height} px, ${ms} ms, Worker lokal)`);
+      await doc.destroy();
     } catch (e: any) {
       updateResult(6, 'fail', e.message);
     }
@@ -94,12 +108,13 @@
     testResults[7].details = lastKey;
   }
 
-  function updateResult(index: number, status: 'ok' | 'fail', details: string) {
+  function updateResult(index: number, status: Status, details: string) {
     testResults[index] = { ...testResults[index], status, details };
   }
 
   function copyReport() {
-    const report = testResults.map(r => `[${r.status === 'ok' ? '✅' : '❌'}] ${r.name}: ${r.details}`).join('\n');
+    const icon = (s: Status) => (s === 'ok' ? '✅' : s === 'info' ? 'ℹ️' : s === 'running' ? '⏳' : '❌');
+    const report = testResults.map(r => `[${icon(r.status)}] ${r.name}: ${r.details}`).join('\n');
     navigator.clipboard.writeText(report);
     alert('Selbsttest-Bericht in die Zwischenablage kopiert!');
   }
@@ -111,9 +126,9 @@
 
   <div style="display: flex; flex-direction: column; gap: 12px; margin: 20px 0;">
     {#each testResults as res}
-      <div style="background: #1e1e1e; padding: 12px; border-radius: 8px; border-left: 4px solid {res.status === 'ok' ? '#4caf50' : res.status === 'fail' ? '#f44336' : '#ff9800'}">
+      <div style="background: #1e1e1e; padding: 12px; border-radius: 8px; border-left: 4px solid {res.status === 'ok' ? '#4caf50' : res.status === 'fail' ? '#f44336' : res.status === 'info' ? '#2196f3' : '#ff9800'}">
         <strong>{res.name}</strong>:
-        <span style="color: {res.status === 'ok' ? '#81c784' : res.status === 'fail' ? '#e57373' : '#ffb74d'}">
+        <span style="color: {res.status === 'ok' ? '#81c784' : res.status === 'fail' ? '#e57373' : res.status === 'info' ? '#64b5f6' : '#ffb74d'}">
           {res.status.toUpperCase()}
         </span>
         <div style="font-size: 13px; color: #aaa; margin-top: 4px; word-break: break-all;">{res.details}</div>

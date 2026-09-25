@@ -1,7 +1,9 @@
+/// <reference types="vite/client" />
 import * as pdfjsLib from 'pdfjs-dist';
+// Worker wird von Vite mitgebaut und lokal ausgeliefert (kein CDN → funktioniert offline)
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
-// Configure pdf.js worker workerSrc
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export async function loadPdfDocument(file: File | ArrayBuffer): Promise<pdfjsLib.PDFDocumentProxy> {
   const data = file instanceof File ? await file.arrayBuffer() : file;
