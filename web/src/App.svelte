@@ -456,12 +456,6 @@
   {:else if route === 'settings'}
     <div class="scroll" style="padding: 24px; max-width: 600px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 20px;">
       <h2>Einstellungen & Datensicherung</h2>
-      <div style="font-size: 12px; color: #777;">Version vom {__BUILD_STAMP__} (UTC)</div>
-      <div style="font-size: 12px; color: #777;">
-        Anzeige: {window.innerWidth}×{window.innerHeight} · Bildschirm {screen.width}×{screen.height} ·
-        Faktor {window.devicePixelRatio} · {(navigator as any).standalone ? 'Home-Bildschirm' : 'Browser'} ·
-        Abstand oben {getComputedStyle(document.querySelector('.app-root') ?? document.body).paddingTop}
-      </div>
       <label style="display: flex; flex-direction: column; gap: 6px;">
         Dein Name (für Noten-Verfasser):
         <input type="text" bind:value={inputUserName} style="padding: 10px; background: #222; border: 1px solid #444; color: white; border-radius: 6px;" />
@@ -479,6 +473,12 @@
           <input type="file" accept=".zip" onchange={handleBackupFileSelected} style="display: none;" />
         </label>
       </div>
+
+      <!-- Version und Autor, wie in der Android-App am Ende der Einstellungen -->
+      <footer style="margin-top: 32px; padding-bottom: 24px; display: flex; flex-direction: column; align-items: center; gap: 2px; color: #8a8a8a;">
+        <span style="font-size: 12px;" title="Build {__BUILD_STAMP__} UTC">Webversion {__WEB_VERSION__}</span>
+        <span style="font-size: 12px; font-weight: 500; letter-spacing: 0.3px;">by workFLOw42 · ©2026</span>
+      </footer>
     </div>
   {:else if route === 'setlists'}
     <div class="scroll" style="padding: 24px; max-width: 800px; margin: 0 auto; width: 100%;">
