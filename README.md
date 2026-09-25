@@ -135,6 +135,11 @@ eingeteilt in *Gleiche Noten, andere Angaben*, *Mögliche andere Fassung*, *Neu*
 vorgeschlagen*, *Nur Neue*, *Alles ersetzen*. Setlists verweisen danach auf die eigenen
 Lieder, ohne Dubletten.
 
+*Aus Sicherung übernehmen* ersetzt das vorhandene Lied, statt ein zweites anzulegen.
+Notizen werden dabei zusammengeführt – pro Person bleibt die neuere –, und fehlt die
+Notendatei in der Sicherung, bleibt die eigene erhalten. Sicherungen aus einer neueren
+App-Version werden mit einem Hinweis abgelehnt, statt unvollständig eingelesen zu werden.
+
 > Gekaufte Noten dürfen meist nicht weitergegeben werden. *Setlist teilen* weist vor dem
 > Erstellen darauf hin; die Verantwortung liegt beim Nutzer.
 

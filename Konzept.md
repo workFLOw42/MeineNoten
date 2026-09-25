@@ -201,8 +201,10 @@ bleiben. Die Zoom-Werte (`scale`, `offsetXRatio`, `offsetYRatio`) sind wie in
 | Sicherung | *Alles sichern* als ZIP im Android-Format |
 | Sicherung | *Setlist teilen* als Setlist-ZIP mit Urheberrechtshinweis und Web Share API (native Freigabe an AirDrop, WhatsApp, Mail) |
 | Sicherung | *Sicherung einlesen* mit Vergleichsmaske und Aktion pro Lied |
-| Sicherung | Identität übernehmen, Notizen anderer Personen zusammenführen |
-| Sicherung | Setlist-Verweise folgen umbenannten Lied-IDs (*Beide behalten*) |
+| Sicherung | Identität übernehmen samt bisher eigener Notizen, Notizen anderer Personen zusammenführen |
+| Sicherung | Setlist-Verweise folgen umbenannten Lied-IDs (*Beide behalten*), nicht vorhandene Lieder fallen heraus |
+| Sicherung | Einstellungen aus der Sicherung wahlweise übernehmen (ohne Name und Kennung) |
+| Sicherung | Sicherungen mit höherer Format-Version werden abgelehnt |
 | Komfort | Display bleibt an (Wake Lock mit automatischer Re-Aktivierung bei `visibilitychange`), Titel „‹Name›s Noten“ |
 | Komfort | Vollständige Einstellungsseite (Statusleiste, Blättern, Pedal, Anzeige, Person, Notizen anderer, Sicherung) |
 | Komfort | Design-Wahl: System, Hell, Dunkel (`themeMode`) |
@@ -876,8 +878,12 @@ Zugeordnet wird in dieser Reihenfolge, der erste Treffer gilt:
 |---|---|---|
 | **Identisch** | gleicher Datei-Hash, alle Angaben gleich | überspringen, ist schon da |
 | **Gleiche Noten, andere Angaben** | gleicher Datei-Hash, aber z. B. anderer Titel, anderes Genre, neue Notizen – auch bei anderer Kennung, also *anders abgelegt* | meins behalten, fremde Notizen anbieten |
-| **Mögliche andere Fassung** | gleicher Titel und Künstler, anderer Datei-Hash | fragen |
+| **Mögliche andere Fassung** | gleicher Titel und Künstler, anderer Datei-Hash – oder gleiche Kennung bei anderem Titel *und* anderer Datei | fragen |
 | **Neu** | nichts davon | importieren |
+
+Die letzte Regel der dritten Zeile kam mit 1.6.5 dazu: Eine gemeinsam genutzte Setlist
+kann auf zwei Geräten bearbeitet werden, bis weder Datei noch Titel übereinstimmen. Als
+*Neu* eingestuft, hätte *übernehmen* das eigene Lied ohne Rückfrage ersetzt.
 
 Bei den beiden mittleren Gruppen zeigt die Maske die **Unterschiede Feld für Feld**
 („Titel: *Großer Gott* ↔ *Großer Gott, wir loben dich*“) und die erste Seite beider
@@ -886,6 +892,12 @@ Scans dieselben Noten sind, sieht man am Bild sofort, am Titel nicht. Pro Lied:
 
 *   **Meins behalten** – nur die ausgewählten fremden Notizen kommen hinzu.
 *   **Aus der Sicherung übernehmen** – Angaben *und* Datei, nie nur eines von beiden.
+    Das Lied behält dabei die **eigene Kennung**: Es ersetzt das vorhandene, statt
+    daneben ein zweites anzulegen, und alle eigenen Setlists zeigen weiter darauf.
+    Notizen werden zusammengeführt (pro Person gewinnt die neuere), eigene Notizen, die
+    nach der Sicherung geschrieben wurden, gehen nicht verloren. Fehlt die Notendatei in
+    der Sicherung, bleibt die eigene samt Zoom erhalten; gibt es gar keine, wird das Lied
+    zum Textlied statt zu einem PDF ohne Datei.
 *   **Beide behalten** – das eingelesene Lied bekommt eine neue Kennung, *Version* wird
     vorbelegt („aus Sicherung Anna S.“), damit die beiden in der Liste unterscheidbar
     sind.
@@ -899,14 +911,16 @@ Den **Zoom pro Seite** übernimmt die App nur bei neuen Liedern oder bei ausdrü
 „Aus der Sicherung übernehmen“. Er ist persönlich; das eigene Lied behält seinen.
 
 Schnellwahlen oben: *Alles wie vorgeschlagen*, *Nur Neue*, *Alles ersetzen*. Wer die
-eigene Sicherung zurückholt, tippt einmal und ist fertig. *Alles ersetzen* löscht
-vorher den Bestand auf dem Gerät und verlangt eine Bestätigung.
+eigene Sicherung zurückholt, tippt einmal und ist fertig. *Alles ersetzen* ersetzt den
+Bestand auf dem Gerät und verlangt eine Bestätigung.
 
 **Setlists** verweisen auf Lied-Kennungen der Sicherung. Wird ein Lied als *identisch*
 übersprungen oder *meins behalten*, wird der Verweis auf das **eigene** Lied umgebogen –
 die Setlist bleibt vollständig, ohne Dublette. Wählt man ein Lied ab, das eine
 ausgewählte Setlist braucht, weist die Maske darauf hin („Setlist *Erntedank* enthält
-dieses Lied“).
+dieses Lied“). Lieder, die nach dem Einlesen nicht existieren (abgewählt und neu),
+fallen aus der Setlist heraus, statt als leerer Verweis stehen zu bleiben; zeigte der
+gemerkte Fortschritt (*Weiter bei …*) auf so ein Lied, beginnt die Setlist von vorne.
 
 **Einstellungen** stehen als eigene Zeile in der Liste, bei *Komplett* abgewählt außer
 bei *Alles ersetzen* – auf einem zweiten Gerät mit anderer Pedalbelegung wäre ein
@@ -914,7 +928,18 @@ stilles Überschreiben lästig. Der eingetragene Name wird nie übernommen; er g
 Gerät, nicht zur Sammlung.
 
 Übernommen wird erst nach *Einlesen* und dann in einem Schritt. Eine abgebrochene
-Wiederherstellung hinterlässt keinen halben Bestand.
+Wiederherstellung hinterlässt keinen halben Bestand. Für die Notendateien heißt das:
+
+*   Eine Datei aus der Sicherung wird zuerst als `<id>.<ext>.part` neben das Ziel
+    geschrieben und ersetzt die alte erst, wenn das Kopieren geklappt hat.
+*   Gelöscht wird nichts vorab, auch nicht bei *Alles ersetzen*. Erst nachdem die neue
+    Liederliste gespeichert ist, entfernt die App die Dateien, auf die kein Lied mehr
+    zeigt (`BackupLogic.orphanedSongFiles`).
+
+**Format-Version.** Trägt eine Sicherung eine höhere `formatVersion`, als die App
+kennt, lehnt sie das Einlesen mit einem Hinweis ab (`BackupLogic.isFormatSupported`),
+statt unbekannte Teile stillschweigend zu verlieren. Web-App und Android verhalten sich
+gleich.
 
 #### Setlist-Datei
 
@@ -1199,6 +1224,14 @@ Fortschritt – sonst würde jedes Öffnen eines Liedes eine neue Version erzeug
     *   `[x]` Unit-Tests für Hinweis, Personenfrage und Umschreiben der Notizen –
         64 Tests grün
     *   `[ ]` Auf dem Gerät prüfen: Vorschau, Personenfrage, Setlist-Hinweis
+    *   `[x]` 1.6.5 – Einlesen ohne Duplikate und Datenverlust:
+        *Sicherung übernehmen* behält die eigene Kennung und führt Notizen zusammen
+        (`BackupLogic.takeBackupSong`); gleiche Kennung wird immer zugeordnet;
+        Notendateien erst nach dem Speichern aufräumen, Kopie über `.part`-Datei;
+        Setlists ohne nicht vorhandene Lieder; Format-Version wird geprüft –
+        75 Tests grün
+    *   `[ ]` Auf dem Gerät prüfen: eigene Sicherung mit *Alles ersetzen* zurückholen,
+        Sicherung eines anderen Geräts mit *übernehmen* einlesen
 5.  Stufe 2 erst, wenn Stufe 1 im Alltag erprobt ist – sie nutzt dasselbe Format und
     dieselbe Zuordnung, nur mit anderem Transport.
 

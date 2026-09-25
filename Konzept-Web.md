@@ -327,13 +327,20 @@ sichtbar. Bedienelemente mindestens 44 × 44 pt (Apple-Richtlinie).
 **Sicherung einlesen**
 
 1.  Datei wählen, ZIP im Worker entpacken, `manifest.json` prüfen, Prüfsummen
-    nachrechnen.
+    nachrechnen. Eine höhere `formatVersion` als bekannt wird mit Hinweis abgelehnt.
 2.  Vergleich mit dem eigenen Bestand – dieselbe Einteilung wie
     `BackupLogic.analyzeBackupSongs`: identisch, gleiche Datei mit anderen Angaben,
-    mögliche andere Fassung (gleicher Titel + Künstler), neu.
+    mögliche andere Fassung (gleicher Titel + Künstler, oder gleiche Kennung), neu.
 3.  Vergleichsmaske, Entscheidung pro Lied: *Meins behalten*, *Sicherung übernehmen*,
     *Beide behalten*, *Überspringen*; fremde Notizen zusammenführen (`mergedWith`).
-4.  Erst nach *Jetzt importieren* wird geschrieben.
+    *Sicherung übernehmen* ersetzt das eigene Lied unter dessen Kennung und führt die
+    Notizen zusammen, statt sie zu überschreiben.
+4.  Bei einer Komplettsicherung: Frage „Bist du diese Person?“. Bei *Ja* wandern die
+    bisher hier geschriebenen Notizen auf die übernommene Kennung (`reassignNoteAuthor`).
+    Einstellungen sind eine eigene, abgewählte Zeile (`applyBackupSettings`: nur
+    bekannte Schlüssel mit passendem Typ, Name und Kennung nie).
+5.  Erst nach *Jetzt importieren* wird geschrieben. Setlists werden mit `rewireSetlist`
+    auf die eigenen Lieder umgebogen; Lieder, die es danach nicht gibt, fallen heraus.
 
 Die Vergleichs- und Notizlogik wird aus Kotlin **Funktion für Funktion** nach
 TypeScript übertragen, zusammen mit den Unit-Tests aus `BackupLogicTest` und
