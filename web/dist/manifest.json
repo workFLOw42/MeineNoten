@@ -1,9 +1,0 @@
-{
-  "name": "Meine Noten",
-  "short_name": "Meine Noten",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#121212",
-  "theme_color": "#121212",
-  "icons": []
-}

@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'web/**'
+      - 'docs/**'
+      - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
 permissions:
@@ -27,7 +29,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
@@ -39,10 +41,19 @@ jobs:
         run: npm run build
         working-directory: ./web
 
-      - name: Prepare /app/ folder structure
+      - name: Assemble site (docs + /app/)
         run: |
           mkdir -p public_html/app
-          cp -r web/dist/* public_html/app/
+          # Bestehende Seiten (Datenschutzerklärung etc.) weiterhin ausliefern
+          cp -r docs public_html/docs
+          cp -r docs/. public_html/
+          # Web-App unter /app/
+          cp -r web/dist/. public_html/app/
+          # Weiterleitung von der Startseite auf die App, falls keine index.html existiert
+          if [ ! -f public_html/index.html ]; then
+            echo '<!doctype html><meta http-equiv="refresh" content="0; url=./app/"><a href="./app/">Meine Noten</a>' > public_html/index.html
+          fi
+          find public_html -maxdepth 2
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -52,7 +63,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page }}
+      url: ${{ steps.deployment.outputs.page_url }}
     needs: build
     runs-on: ubuntu-latest
     steps:
