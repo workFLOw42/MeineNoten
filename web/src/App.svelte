@@ -4,7 +4,7 @@
   import { loadSongsDB, saveSongsDB, loadSetlistsDB, saveSetlistsDB, loadSettingsDB, saveSettingsDB, saveScoreFile, loadScoreFile, deleteSongFromDB } from './lib/storage/db';
   import { loadPdfDocument } from './lib/pdf/pdfRenderer';
   import PdfViewer from './lib/pdf/PdfViewer.svelte';
-  import { renderMusicXml } from './lib/musicxml/osmdRenderer';
+  import MusicXmlViewer from './lib/musicxml/MusicXmlViewer.svelte';
   import {
     matchesQuery,
     sortSongs,
@@ -94,7 +94,10 @@
   // Backup analysis result
   let backupAnalysis = $state<BackupAnalysisResult | null>(null);
 
-  let osmdContainer = $state<HTMLDivElement | null>(null);
+  // Die geladene MusicXML-Datei bleibt hier, damit die Ansicht nach dem Bearbeiten neu
+  // eingehängt werden kann, ohne das Lied erneut zu öffnen.
+  let xmlFile = $state<File | null>(null);
+  let xmlError = $state<string>('');
   let pdfDoc = $state<any>(null);
   let pdfError = $state<string>('');
 
@@ -186,6 +189,8 @@
     pageCount = 0;
     pdfDoc = null;
     pdfError = '';
+    xmlFile = null;
+    xmlError = '';
     showLyricsMode = song.sourceType === 'TEXT';
     notesDropdownOpen = false;
     route = 'detail';
@@ -210,8 +215,10 @@
       }
     } else if (song.sourceType === 'MUSIC_XML') {
       const file = await loadScoreFile(song.fileUri);
-      if (file && osmdContainer) {
-        await renderMusicXml(file, osmdContainer);
+      if (file) {
+        xmlFile = file;
+      } else {
+        xmlError = 'Notendatei nicht gefunden. Bitte die Sicherung erneut einlesen.';
       }
     }
     await rememberSetlistPosition();
@@ -1428,7 +1435,13 @@
           <p style="color: #888;">Lade …</p>
         {/if}
       {:else if currentSong?.sourceType === 'MUSIC_XML'}
-        <div bind:this={osmdContainer} style="width: 100%; height: 100%; overflow: auto; background: white; color: black; padding: 16px; filter: {scoreFilter};"></div>
+        {#if xmlError}
+          <p style="color: #f88; padding: 24px; text-align: center;">{xmlError}</p>
+        {:else if xmlFile}
+          <MusicXmlViewer file={xmlFile} filter={scoreFilter} />
+        {:else}
+          <p style="color: #888;">Lade …</p>
+        {/if}
       {/if}
     </div>
   {/if}

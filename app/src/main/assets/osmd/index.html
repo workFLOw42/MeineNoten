@@ -11,7 +11,10 @@
             overflow-x: hidden;
             -webkit-text-size-adjust: 100%;
         }
-        #osmd-container { width: 100%; }
+        #osmd-container {
+            width: 100%;
+            transform-origin: top center;
+        }
         #status {
             font-family: sans-serif;
             padding: 24px;
@@ -101,6 +104,56 @@
             osmd.setOptions({ defaultColorMusic: enabled ? "#FFFFFF" : "#000000" });
             osmd.render();
         }
+
+        // Two-finger zoom. The viewport forbids browser zoom (it would only magnify the
+        // page and push the score sideways off screen), so the gesture is handled here:
+        // while the fingers move, the sheet is scaled with CSS for smooth feedback; on
+        // release OSMD re-renders at the new zoom, so the notes stay sharp and the
+        // measures re-wrap to the screen width. One finger still scrolls normally.
+        var MIN_ZOOM = 0.5, MAX_ZOOM = 3;
+        var pinchStartDist = 0, pinching = false, liveScale = 1;
+
+        function touchDist(e) {
+            var a = e.touches[0], b = e.touches[1];
+            return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        }
+
+        function clampZoom(z) { return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)); }
+
+        document.addEventListener("touchstart", function (e) {
+            if (e.touches.length === 2 && osmd) {
+                e.preventDefault();
+                pinching = true;
+                pinchStartDist = touchDist(e) || 1;
+                liveScale = 1;
+            }
+        }, { passive: false });
+
+        document.addEventListener("touchmove", function (e) {
+            if (!pinching || e.touches.length < 2) return;
+            e.preventDefault();
+            var current = osmd.Zoom;
+            liveScale = clampZoom(current * touchDist(e) / pinchStartDist) / current;
+            document.getElementById("osmd-container").style.transform = "scale(" + liveScale + ")";
+        }, { passive: false });
+
+        function endPinch(e) {
+            if (!pinching || e.touches.length >= 2) return;
+            pinching = false;
+            var container = document.getElementById("osmd-container");
+            container.style.transform = "";
+            var next = clampZoom(osmd.Zoom * liveScale);
+            liveScale = 1;
+            if (Math.abs(next - osmd.Zoom) < 0.02) return;
+            // Keep the reading position: same relative scroll offset after re-rendering.
+            var root = document.scrollingElement || document.documentElement;
+            var ratio = root.scrollTop / Math.max(1, root.scrollHeight);
+            osmd.Zoom = next;
+            osmd.render();
+            root.scrollTop = ratio * root.scrollHeight;
+        }
+        document.addEventListener("touchend", endPinch, { passive: false });
+        document.addEventListener("touchcancel", endPinch, { passive: false });
 
         window.addEventListener("load", function () {
             if (initOsmd()) {

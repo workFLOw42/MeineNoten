@@ -3,8 +3,9 @@ import JSZip from 'jszip';
 
 export async function renderMusicXml(
   file: File | ArrayBuffer,
-  container: HTMLElement
-): Promise<void> {
+  container: HTMLElement,
+  zoom = 1
+): Promise<OpenSheetMusicDisplay> {
   container.innerHTML = '';
   let xmlString = '';
 
@@ -46,7 +47,9 @@ export async function renderMusicXml(
   });
 
   await osmd.load(xmlString);
+  osmd.Zoom = zoom;
   osmd.render();
+  return osmd;
 }
 
 function isZip(buffer: ArrayBuffer): boolean {
