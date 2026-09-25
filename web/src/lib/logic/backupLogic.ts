@@ -1,6 +1,6 @@
 import type { Song, Setlist, AppSettings, BackupManifest, BackupType } from '../model/types';
 import JSZip from 'jszip';
-import { songToJson, sha256Hex } from './serialization';
+import { songToJson, setlistToJson, sha256Hex } from './serialization';
 
 export function generateBackupFilename(
   type: BackupType,
@@ -23,11 +23,15 @@ export function sanitizeFilenamePart(part: string): string {
     .replace(/^-|-$/g, '');
 }
 
-/** Einstellungen ohne Identität (userId/userName gehören nicht in settings.json). */
-function serializableSettings(settings: AppSettings): Record<string, unknown> {
-  const { userId, userName, lastBackupAt, ...rest } = settings as AppSettings & { key?: string };
+/**
+ * Einstellungen wie Android sie in settings.json schreibt: mit `userName`, aber ohne
+ * `userId` (die Person-ID steht im Manifest und wird nur auf ausdrückliche Nachfrage übernommen).
+ * Fehlt `userName`, setzt Android beim Einlesen der Einstellungen einen leeren Namen.
+ */
+export function serializableSettings(settings: AppSettings): Record<string, unknown> {
+  const { userId, lastBackupAt, ...rest } = settings as AppSettings & { key?: string };
   delete (rest as { key?: string }).key;
-  return rest;
+  return { ...rest, userName: settings.userName ?? '' };
 }
 
 export async function createFullBackupZip(
@@ -60,7 +64,7 @@ export async function createFullBackupZip(
 
   const json = (v: unknown) => JSON.stringify(v, null, 2);
   zip.file('songs.json', json(exportedSongs), { compression: 'DEFLATE' });
-  zip.file('setlists.json', json(setlists), { compression: 'DEFLATE' });
+  zip.file('setlists.json', json(setlists.map(setlistToJson)), { compression: 'DEFLATE' });
   zip.file('settings.json', json(serializableSettings(settings)), { compression: 'DEFLATE' });
 
   const manifest: BackupManifest = {

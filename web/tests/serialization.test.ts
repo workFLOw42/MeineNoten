@@ -104,3 +104,49 @@ describe('export → import round trip', () => {
     expect(result.manifest.fileHashes['files/song-x.pdf']).toBe(imported.backupSong.fileHash);
   });
 });
+
+describe('Kompatibilität Web → Android', () => {
+  const isInt = (v: unknown) => typeof v === 'number' && Number.isInteger(v);
+
+  it('schreibt nur ganze Zahlen in Felder, die Android als Int/Long liest', () => {
+    const base = songFromJson({ id: 's', title: 'T', fileUri: '' });
+    for (const bpm of [null, undefined, '', 'abc', NaN, 120.5, -3, '96']) {
+      const json = songToJson({ ...base, bpm: bpm as any, totalBars: 3.7 as any, lastOpenedAt: 1.5 as any });
+      expect(isInt(json.bpm), `bpm=${String(bpm)}`).toBe(true);
+      expect(json.bpm as number).toBeGreaterThanOrEqual(1);
+      expect(isInt(json.totalBars)).toBe(true);
+      expect(isInt(json.lastOpenedAt)).toBe(true);
+    }
+    expect(songToJson({ ...base, bpm: '' as any }).bpm).toBe(120);
+    expect(songToJson({ ...base, bpm: '96' as any }).bpm).toBe(96);
+    expect(songToJson({ ...base, bpm: 120.5 }).bpm).toBe(121);
+  });
+
+  it('lässt nur Seitenzahlen als Schlüssel der pageViews zu (Android: Map<Int, PageView>)', () => {
+    const base = songFromJson({ id: 's', title: 'T', fileUri: '' });
+    const json = songToJson({
+      ...base,
+      pageViews: { '0': { scale: 2, offsetXRatio: 0.1, offsetYRatio: NaN }, 'x': { scale: 1, offsetXRatio: 0, offsetYRatio: 0 } },
+    });
+    expect(Object.keys(json.pageViews as object)).toEqual(['0']);
+    expect((json.pageViews as any)['0'].offsetYRatio).toBe(0);
+  });
+
+  it('schreibt den Namen in settings.json, aber nicht die Person-ID', async () => {
+    const settings = { userId: 'me-123', userName: 'Flo', rememberZoom: true } as AppSettings;
+    const blob = await createFullBackupZip([], [], settings, async () => null);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const written = JSON.parse(await zip.file('settings.json')!.async('string'));
+    expect(written.userName).toBe('Flo');
+    expect(written.userId).toBeUndefined();
+  });
+
+  it('schreibt ganze Zahlen in setlists.json', async () => {
+    const setlist = { id: 'l', title: 'L', date: '', songIds: [], notes: '', lastSongId: null, lastPage: 1.5, lastPlayedAt: NaN } as any;
+    const blob = await createFullBackupZip([], [setlist], { userId: 'me', userName: '' } as AppSettings, async () => null);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const [written] = JSON.parse(await zip.file('setlists.json')!.async('string'));
+    expect(isInt(written.lastPage)).toBe(true);
+    expect(written.lastPlayedAt).toBe(0);
+  });
+});

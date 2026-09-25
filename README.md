@@ -9,6 +9,8 @@ Entstanden für die Gitarrenbegleitung im Kirchenchor. Das Kernproblem: Beim Spi
 beide Hände belegt. Umblättern muss deshalb ohne Hände funktionieren, oder mit einer
 einzigen, blind ausführbaren Berührung.
 
+[Web-App (iPhone, iPad & Browser)](https://workFLOw42.github.io/MeineNoten/app/)
+
 [Datenschutzerklärung](https://workFLOw42.github.io/MeineNoten/docs/privacy-policy.html)
 
 ## Funktionen

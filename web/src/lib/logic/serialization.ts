@@ -64,10 +64,49 @@ export function songFromJson(raw: any): Song {
   };
 }
 
+/**
+ * Ganze Zahl für Felder, die Android als Int/Long liest.
+ *
+ * kotlinx.serialization bricht bei `null`, Text oder Kommazahl die ganze Datei ab – ein
+ * geleertes BPM-Feld würde sonst den Import aller Lieder auf dem Android-Gerät verhindern.
+ */
+export function toInt(v: unknown, fallback: number, min = 0): number {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
+  if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.round(n));
+}
+
 /** Schreibt ein Lied im Format der Android-App (Feldnamen `notes`/`songNotes`). */
 export function songToJson(song: Song): Record<string, unknown> {
   const { notes, legacyNotes, ...rest } = song;
-  return { ...rest, notes: legacyNotes ?? '', songNotes: notes ?? [] };
+  const pageViews: Record<string, PageView> = {};
+  for (const [key, v] of Object.entries(song.pageViews ?? {})) {
+    const page = Number(key);
+    if (!Number.isInteger(page) || page < 0) continue; // Android: Map<Int, PageView>
+    pageViews[String(page)] = {
+      scale: Number.isFinite(v?.scale) ? v.scale : 1,
+      offsetXRatio: Number.isFinite(v?.offsetXRatio) ? v.offsetXRatio : 0,
+      offsetYRatio: Number.isFinite(v?.offsetYRatio) ? v.offsetYRatio : 0,
+    };
+  }
+  return {
+    ...rest,
+    bpm: toInt(song.bpm, 120, 1),
+    totalBars: toInt(song.totalBars, 0),
+    lastOpenedAt: toInt(song.lastOpenedAt, 0),
+    pageViews,
+    notes: legacyNotes ?? '',
+    songNotes: (notes ?? []).map(n => ({ ...n, editedAt: toInt(n.editedAt, 0) })),
+  };
+}
+
+/** Schreibt eine Setlist so, dass Android sie sicher lesen kann. */
+export function setlistToJson(setlist: Setlist): Record<string, unknown> {
+  return {
+    ...setlist,
+    lastPage: toInt(setlist.lastPage, 0),
+    lastPlayedAt: toInt(setlist.lastPlayedAt, 0),
+  };
 }
 
 export function setlistFromJson(raw: any): Setlist {

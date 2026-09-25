@@ -6,7 +6,7 @@
   import PdfViewer from './lib/pdf/PdfViewer.svelte';
   import { renderMusicXml } from './lib/musicxml/osmdRenderer';
   import { matchesQuery, sortSongs, possessiveName, mergeNotes } from './lib/logic/songLogic';
-  import { migrateLegacyNote } from './lib/logic/serialization';
+  import { migrateLegacyNote, toInt } from './lib/logic/serialization';
   import { createFullBackupZip, generateBackupFilename } from './lib/logic/backupLogic';
   import { analyzeBackupFile, type BackupAnalysisResult } from './lib/logic/backupImportLogic';
   import SelfTest from './routes/SelfTest.svelte';
@@ -182,7 +182,7 @@
       artist: editArtist,
       version: editVersion,
       genre: editGenre,
-      bpm: editBpm,
+      bpm: toInt(editBpm, 120, 1),
       notes: updatedNotes,
     };
 
@@ -543,7 +543,7 @@
       </label>
       <label style="display: flex; flex-direction: column; gap: 4px;">
         BPM (Tempo):
-        <input type="number" bind:value={editBpm} style="padding: 8px; background: #222; border: 1px solid #444; color: white; border-radius: 4px;" />
+        <input type="number" inputmode="numeric" min="1" step="1" bind:value={editBpm} style="padding: 8px; background: #222; border: 1px solid #444; color: white; border-radius: 4px;" />
       </label>
       <label style="display: flex; flex-direction: column; gap: 4px;">
         Persönliche Notiz:
