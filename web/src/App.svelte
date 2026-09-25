@@ -402,7 +402,9 @@
       <button onclick={() => route = 'songs'} style="background: none; border: none; padding: 14px 20px; color: {route === 'songs' ? '#2196f3' : '#aaa'}; font-weight: 500; cursor: pointer; border-bottom: 2px solid {route === 'songs' ? '#2196f3' : 'transparent'};">Lieder ({songs.length})</button>
       <button onclick={() => route = 'setlists'} style="background: none; border: none; padding: 14px 20px; color: {route === 'setlists' ? '#2196f3' : '#aaa'}; font-weight: 500; cursor: pointer; border-bottom: 2px solid {route === 'setlists' ? '#2196f3' : 'transparent'};">Setlists ({setlists.length})</button>
       <button onclick={() => route = 'settings'} style="background: none; border: none; padding: 14px 20px; color: {route === 'settings' ? '#2196f3' : '#aaa'}; font-weight: 500; cursor: pointer; border-bottom: 2px solid {route === 'settings' ? '#2196f3' : 'transparent'};">Einstellungen & Sicherung</button>
+      <!-- Selbsttest-Reiter ausgeblendet; erreichbar über Tipp auf die Webversion in den Einstellungen.
       <button onclick={() => route = 'selftest'} style="background: none; border: none; padding: 14px 20px; color: #aaa; font-weight: 500; cursor: pointer;">Selbsttest</button>
+      -->
     </nav>
   {/if}
 
@@ -476,7 +478,8 @@
 
       <!-- Version und Autor, wie in der Android-App am Ende der Einstellungen -->
       <footer style="margin-top: 32px; padding-bottom: 24px; display: flex; flex-direction: column; align-items: center; gap: 2px; color: #8a8a8a;">
-        <span style="font-size: 12px;" title="Build {__BUILD_STAMP__} UTC">Webversion {__WEB_VERSION__}</span>
+        <!-- Tipp auf die Version öffnet den Selbsttest (Diagnose bei Problemen) -->
+        <button onclick={() => route = 'selftest'} style="background: none; border: none; padding: 0; font: inherit; font-size: 12px; color: inherit; cursor: pointer;" title="Build {__BUILD_STAMP__} UTC – tippen für Selbsttest">Webversion {__WEB_VERSION__}</button>
         <span style="font-size: 12px; font-weight: 500; letter-spacing: 0.3px;">by workFLOw42 · ©2026</span>
       </footer>
     </div>
