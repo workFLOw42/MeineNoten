@@ -66,8 +66,8 @@ export async function renderPdfPageFitted(
 
   canvas.width = buffer.width;
   canvas.height = buffer.height;
-  canvas.style.width = `${cssWidth}px`;
-  canvas.style.height = `${cssHeight}px`;
+  // Die CSS-Größe setzt der Aufrufer (PdfViewer) aus dem Rückgabewert; hier nicht in style
+  // schreiben, sonst überschreiben sich beide gegenseitig.
   canvas.getContext('2d')?.drawImage(buffer, 0, 0);
   return { cssWidth, cssHeight };
 }

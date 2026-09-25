@@ -28,6 +28,10 @@ function updateTopInset() {
   const coversStatusBar = window.innerHeight >= screen.height - 1;
   const inset = standalone && isIOS && coversStatusBar ? '20px' : '0px';
   document.documentElement.style.setProperty('--top-inset', inset);
+  // Neuere iOS-Versionen legen als Home-Bildschirm-App einen Unschärfe-Streifen (~25 pt)
+  // unter die Statusleiste über den Seiteninhalt. Der lässt sich nicht abschalten; daher
+  // diesen Bereich frei lassen, damit dort keine Knöpfe oder Texte liegen.
+  document.documentElement.style.setProperty('--edge-blur', standalone && isIOS ? '26px' : '0px');
 }
 updateTopInset();
 window.addEventListener('resize', updateTopInset);

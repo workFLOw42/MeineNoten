@@ -421,7 +421,7 @@
       <h3>Sicherung vergleichen & einlesen</h3>
       <button onclick={applyBackupImport} style="background: #4caf50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500;">Jetzt importieren</button>
     </div>
-    <div style="flex: 1; overflow-y: auto; padding: 24px; max-width: 800px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 16px;">
+    <div class="scroll" style="padding: 24px; max-width: 800px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 16px;">
       {#if backupAnalysis}
         <div style="background: #1e1e1e; padding: 16px; border-radius: 8px; border: 1px solid #333;">
           <strong>{backupAnalysis.manifest.title}</strong> · {backupAnalysis.manifest.authorName || 'Unbekannt'} · {backupAnalysis.songs.length} Lieder, {backupAnalysis.setlists.length} Setlists
@@ -454,9 +454,14 @@
       {/if}
     </div>
   {:else if route === 'settings'}
-    <div style="padding: 24px; max-width: 600px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 20px;">
+    <div class="scroll" style="padding: 24px; max-width: 600px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 20px;">
       <h2>Einstellungen & Datensicherung</h2>
       <div style="font-size: 12px; color: #777;">Version vom {__BUILD_STAMP__} (UTC)</div>
+      <div style="font-size: 12px; color: #777;">
+        Anzeige: {window.innerWidth}×{window.innerHeight} · Bildschirm {screen.width}×{screen.height} ·
+        Faktor {window.devicePixelRatio} · {(navigator as any).standalone ? 'Home-Bildschirm' : 'Browser'} ·
+        Abstand oben {getComputedStyle(document.querySelector('.app-root') ?? document.body).paddingTop}
+      </div>
       <label style="display: flex; flex-direction: column; gap: 6px;">
         Dein Name (für Noten-Verfasser):
         <input type="text" bind:value={inputUserName} style="padding: 10px; background: #222; border: 1px solid #444; color: white; border-radius: 6px;" />
@@ -476,7 +481,7 @@
       </div>
     </div>
   {:else if route === 'setlists'}
-    <div style="flex: 1; overflow-y: auto; padding: 24px; max-width: 800px; margin: 0 auto; width: 100%;">
+    <div class="scroll" style="padding: 24px; max-width: 800px; margin: 0 auto; width: 100%;">
       <h2>Setlists</h2>
       {#if setlists.length === 0}
         <p style="color: #888;">Keine Setlists vorhanden.</p>
@@ -530,7 +535,7 @@
       <h3>Lied bearbeiten</h3>
       <button onclick={saveEditedSong} style="background: #2196f3; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Speichern</button>
     </div>
-    <div style="padding: 24px; max-width: 600px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 16px;">
+    <div class="scroll" style="padding: 24px; max-width: 600px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 16px;">
       <label style="display: flex; flex-direction: column; gap: 4px;">
         Titel:
         <input type="text" bind:value={editTitle} style="padding: 8px; background: #222; border: 1px solid #444; color: white; border-radius: 4px;" />
@@ -574,7 +579,7 @@
       </select>
     </div>
 
-    <div style="flex: 1; overflow-y: auto; padding: 24px; max-width: 800px; margin: 0 auto; width: 100%;">
+    <div class="scroll" style="padding: 24px; max-width: 800px; margin: 0 auto; width: 100%;">
       {#if filteredSongs.length === 0}
         <div style="text-align: center; color: #888; margin-top: 60px;">
           <p style="font-size: 18px;">Keine Noten gefunden.</p>

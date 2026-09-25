@@ -34,10 +34,27 @@
         margin: 0;
         padding: 0;
       }
+      /* Scrollbarer Inhaltsbereich unter einer Kopfzeile. min-height: 0 ist nötig, sonst wächst
+         das Flex-Kind mit dem Inhalt mit und es gibt nichts zu scrollen. */
+      .scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+        box-sizing: border-box;
+      }
+      .app-root > * {
+        flex-shrink: 0;
+      }
+      .app-root > .scroll {
+        flex-shrink: 1;
+      }
       /* Abstand zur iOS-Statusleiste; --top-inset setzt main.ts, falls env() 0 liefert,
          die App aber trotzdem unter der Statusleiste beginnt (iPhone mit Home-Taste). */
       .app-root {
-        padding: max(env(safe-area-inset-top, 0px), var(--top-inset, 0px)) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+        padding: calc(max(env(safe-area-inset-top, 0px), var(--top-inset, 0px)) + var(--edge-blur, 0px)) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
       }
       body {
         margin: 0;

@@ -37,6 +37,9 @@
   let ox = $state(0); // offsetXRatio
   let oy = $state(0); // offsetYRatio
   let renderedZoom = 1;
+  /** Angezeigte Größe der eingepassten Seite in CSS-Pixeln (unabhängig von der Auflösung). */
+  let cssW = $state(0);
+  let cssH = $state(0);
 
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -64,7 +67,9 @@
     if (!pdfDoc || !canvas || width <= 0 || height <= 0) return;
     renderedZoom = zoom;
     try {
-      await renderPdfPageFitted(pdfDoc, pageIndex + 1, canvas, width, height, zoom);
+      const size = await renderPdfPageFitted(pdfDoc, pageIndex + 1, canvas, width, height, zoom);
+      cssW = size.cssWidth;
+      cssH = size.cssHeight;
     } catch (e) {
       console.error('PDF-Seite konnte nicht gezeichnet werden', e);
     }
@@ -272,9 +277,14 @@
   role="presentation"
   onmousedown={onMouseDown}
 >
+  <!-- style:… statt style="…": Svelte setzt sonst bei jeder Zoomänderung das ganze
+       style-Attribut neu und löscht dabei Breite/Höhe. Dann erscheint das Canvas in voller
+       Pixelgröße (2–4× zu groß) und lässt sich nicht mehr herauszoomen. -->
   <canvas
     bind:this={canvas}
-    style="transform: translate({ox * width}px, {oy * height}px) scale({scale});"
+    style:width={cssW ? `${cssW}px` : null}
+    style:height={cssH ? `${cssH}px` : null}
+    style:transform={`translate(${ox * width}px, ${oy * height}px) scale(${scale})`}
   ></canvas>
 </div>
 
