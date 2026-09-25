@@ -119,6 +119,8 @@ veröffentlicht wurde.
 | 11 | 1.5.0 | Navigationsmenü, Einstellungen, Statusleiste, Design-Wahl, Startbildschirm |
 | 12 | 1.6.0 | Person, Notizen pro Person, Datei-Prüfsumme |
 | 13 | 1.6.1 | Datensicherung als ZIP, Vergleichsmaske, Setlist teilen, Hinweise |
+| 14 | 1.6.2 | Vorschau in der Vergleichsmaske, Personenfrage, Setlist-Hinweis |
+| 15 | 1.6.3 | Noten im Dunkeldesign pro Lied: Normal, Dezenter, Invertiert |
 
 Die Nummer steht in `app/version.properties` und wird nach jedem erfolgreichen
 `:app:bundleRelease` automatisch erhöht. Die Datei gehört ins Repository, damit sich
