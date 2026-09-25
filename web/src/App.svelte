@@ -410,7 +410,7 @@
 
   {#if route === 'selftest'}
     <div style="padding: 12px; background: #1e1e1e; display: flex; justify-content: space-between; align-items: center;">
-      <button onclick={() => route = 'songs'} style="background: #333; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">← Zurück</button>
+      <button onclick={() => route = 'settings'} style="background: #333; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">← Zurück</button>
       <h3>Selbsttest</h3>
       <div></div>
     </div>
