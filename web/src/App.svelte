@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import type { Song, Setlist, AppSettings } from './lib/model/types';
   import { loadSongsDB, saveSongsDB, loadSetlistsDB, saveSetlistsDB, loadSettingsDB, saveSettingsDB, saveScoreFile, loadScoreFile } from './lib/storage/db';
-  import { loadPdfDocument, renderPdfPageToCanvas } from './lib/pdf/pdfRenderer';
+  import { loadPdfDocument } from './lib/pdf/pdfRenderer';
+  import PdfViewer from './lib/pdf/PdfViewer.svelte';
   import { renderMusicXml } from './lib/musicxml/osmdRenderer';
   import { matchesQuery, sortSongs, possessiveName, mergeNotes } from './lib/logic/songLogic';
   import { migrateLegacyNote } from './lib/logic/serialization';
@@ -16,7 +17,12 @@
   let currentSong = $state<Song | null>(null);
   let currentPage = $state<number>(0);
   let pageCount = $state<number>(0);
-  let route = $state<'songs' | 'setlists' | 'detail' | 'settings' | 'selftest' | 'edit' | 'compare'>('songs');
+  let route = $state<'songs' | 'setlists' | 'setlist' | 'detail' | 'settings' | 'selftest' | 'edit' | 'compare'>('songs');
+
+  // Geöffnete Setlist: Lieder werden in deren Reihenfolge durchgeblättert
+  let currentSetlist = $state<Setlist | null>(null);
+  let setlistIndex = $state<number>(-1);
+  let backRoute = $state<'songs' | 'setlist'>('songs');
 
   // List view search & sort
   let searchQuery = $state<string>('');
@@ -36,9 +42,9 @@
   // Backup analysis result
   let backupAnalysis = $state<BackupAnalysisResult | null>(null);
 
-  let canvasEl = $state<HTMLCanvasElement | null>(null);
   let osmdContainer = $state<HTMLDivElement | null>(null);
-  let pdfDoc: any = null;
+  let pdfDoc = $state<any>(null);
+  let pdfError = $state<string>('');
 
   onMount(async () => {
     songs = await loadSongsDB();
@@ -55,21 +61,53 @@
     window.addEventListener('keydown', handleGlobalKey);
   });
 
-  async function openSong(song: Song) {
+  /** Lieder der Setlist in ihrer Reihenfolge; gelöschte Lieder fallen heraus. */
+  function setlistSongs(setlist: Setlist | null): Song[] {
+    if (!setlist) return [];
+    const byId = new Map(songs.map(s => [s.id, s]));
+    return setlist.songIds.map(id => byId.get(id)).filter((s): s is Song => !!s);
+  }
+
+  function openSetlist(setlist: Setlist) {
+    currentSetlist = setlist;
+    route = 'setlist';
+  }
+
+  /** Öffnet ein Lied aus der Setlist; [startPage] < 0 heißt: letzte Seite (beim Zurückblättern). */
+  async function openFromSetlist(index: number, startPage = 0) {
+    const list = setlistSongs(currentSetlist);
+    if (index < 0 || index >= list.length) return;
+    setlistIndex = index;
+    backRoute = 'setlist';
+    await openSong(list[index], startPage);
+  }
+
+  async function openSong(song: Song, startPage = 0) {
+    if (route !== 'detail' && backRoute !== 'setlist') setlistIndex = -1;
     currentSong = song;
     currentPage = 0;
+    pageCount = 0;
+    pdfDoc = null;
+    pdfError = '';
     route = 'detail';
 
-    const updated = songs.map(s => s.id === song.id ? { ...s, lastOpenedAt: Date.now() } : s);
-    songs = updated;
+    const now = Date.now();
+    songs = songs.map(s => s.id === song.id ? { ...s, lastOpenedAt: now } : s);
     await saveSongsDB(songs);
 
     if (song.sourceType === 'PDF') {
       const file = await loadScoreFile(song.fileUri);
-      if (file) {
-        pdfDoc = await loadPdfDocument(file);
-        pageCount = pdfDoc.numPages;
-        await renderCurrentPdfPage();
+      if (!file) {
+        pdfError = 'Notendatei nicht gefunden. Bitte die Sicherung erneut einlesen.';
+        return;
+      }
+      try {
+        const doc = await loadPdfDocument(file);
+        pageCount = doc.numPages;
+        currentPage = startPage < 0 ? doc.numPages - 1 : Math.min(startPage, doc.numPages - 1);
+        pdfDoc = doc;
+      } catch (e: any) {
+        pdfError = `PDF konnte nicht geöffnet werden: ${e?.message ?? e}`;
       }
     } else if (song.sourceType === 'MUSIC_XML') {
       const file = await loadScoreFile(song.fileUri);
@@ -77,6 +115,38 @@
         await renderMusicXml(file, osmdContainer);
       }
     }
+    await rememberSetlistPosition();
+  }
+
+  /** Merkt sich wie Android pro Setlist, wo zuletzt gespielt wurde. */
+  async function rememberSetlistPosition() {
+    if (!currentSetlist || setlistIndex < 0 || !currentSong) return;
+    const updated: Setlist = { ...currentSetlist, lastSongId: currentSong.id, lastPage: currentPage, lastPlayedAt: Date.now() };
+    currentSetlist = updated;
+    setlists = setlists.map(s => s.id === updated.id ? updated : s);
+    await saveSetlistsDB(setlists);
+  }
+
+  function closeDetail() {
+    pdfDoc = null;
+    if (setlistIndex >= 0 && currentSetlist) {
+      route = 'setlist';
+    } else {
+      route = 'songs';
+    }
+    backRoute = 'songs';
+    setlistIndex = -1;
+  }
+
+  let pageViewSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  function handlePageViewChange(view: import('./lib/model/types').PageView) {
+    if (!currentSong || settings?.rememberZoom === false) return;
+    const key = String(currentPage);
+    const updated: Song = { ...currentSong, pageViews: { ...currentSong.pageViews, [key]: view } };
+    currentSong = updated;
+    songs = songs.map(s => s.id === updated.id ? updated : s);
+    if (pageViewSaveTimer) clearTimeout(pageViewSaveTimer);
+    pageViewSaveTimer = setTimeout(() => saveSongsDB(songs), 500);
   }
 
   function startEditSong(song: Song) {
@@ -162,20 +232,34 @@
       // Identität zuerst übernehmen, damit alte Einzelnotizen der richtigen Person zugeordnet werden
       let activeSettings = settings;
       if (analysis.adoptAuthorIdentity && analysis.manifest.authorId) {
-        activeSettings = { ...settings, userId: analysis.manifest.authorId, userName: analysis.manifest.authorName || settings.userName };
+        activeSettings = { ...activeSettings, userId: analysis.manifest.authorId, userName: analysis.manifest.authorName || activeSettings.userName };
+      }
+      // Eigenen Namen aus der Sicherung übernehmen, solange hier noch keiner eingetragen ist
+      const backupName = (analysis.settingsInBackup as any)?.userName || analysis.manifest.authorName || '';
+      if (!activeSettings.userName.trim() && backupName.trim()) {
+        activeSettings = { ...activeSettings, userName: backupName.trim() };
+      }
+      if (activeSettings !== settings) {
         settings = activeSettings;
+        inputUserName = activeSettings.userName;
         await saveSettingsDB(activeSettings);
       }
 
       const updatedSongs = [...songs];
       const updatedSetlists = [...setlists];
+      // Setlists zeigen auf Lied-IDs; bei "Meins behalten"/"Beide behalten" ändert sich die ID
+      const idMap = new Map<string, string>();
 
       for (const item of analysis.songs) {
         const backupSong = migrateLegacyNote(item.backupSong, activeSettings.userId, activeSettings.userName);
 
-        if (item.action === 'SKIP') continue;
+        if (item.action === 'SKIP') {
+          if (item.localSong) idMap.set(backupSong.id, item.localSong.id);
+          continue;
+        }
 
         if (item.action === 'KEEP_OWN') {
+          if (item.localSong) idMap.set(backupSong.id, item.localSong.id);
           // Eigenes Lied bleibt, aber Notizen anderer Personen werden auf Wunsch ergänzt
           if (item.localSong && item.mergeForeignNotes) {
             const idx = updatedSongs.findIndex(s => s.id === item.localSong!.id);
@@ -213,11 +297,12 @@
         const existingIdx = updatedSongs.findIndex(s => s.id === finalSong.id);
         if (existingIdx >= 0) updatedSongs[existingIdx] = finalSong;
         else updatedSongs.push(finalSong);
+        idMap.set(backupSong.id, finalSong.id);
       }
 
       for (const sItem of analysis.setlists) {
         if (!sItem.importSetlist) continue;
-        const s = sItem.backupSetlist;
+        const s = { ...sItem.backupSetlist, songIds: sItem.backupSetlist.songIds.map(id => idMap.get(id) ?? id) };
         const existingIdx = updatedSetlists.findIndex(set => set.id === s.id || (sItem.localSetlist && set.id === sItem.localSetlist.id));
         if (existingIdx >= 0) updatedSetlists[existingIdx] = s;
         else updatedSetlists.push(s);
@@ -238,20 +323,23 @@
   }
 
   async function renderCurrentPdfPage() {
-    if (!pdfDoc || !canvasEl) return;
-    await renderPdfPageToCanvas(pdfDoc, currentPage + 1, canvasEl, 1.0, 0, 0);
+    // Zeichnen erledigt PdfViewer; hier nur die Position in der Setlist merken
+    await rememberSetlistPosition();
   }
 
   function handleGlobalKey(e: KeyboardEvent) {
     if (route !== 'detail') return;
-    if (e.key === 'ArrowRight' || e.key === 'PageDown') nextPage();
-    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') prevPage();
+    // Pedale senden meist Pfeiltasten, Bild auf/ab oder Leertaste
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); nextPage(); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); prevPage(); }
   }
 
   function nextPage() {
     if (currentSong?.sourceType === 'PDF' && currentPage < pageCount - 1) {
       currentPage++;
       renderCurrentPdfPage();
+    } else if (setlistIndex >= 0 && setlistIndex < setlistSongs(currentSetlist).length - 1) {
+      openFromSetlist(setlistIndex + 1, 0);
     }
   }
 
@@ -259,6 +347,8 @@
     if (currentSong?.sourceType === 'PDF' && currentPage > 0) {
       currentPage--;
       renderCurrentPdfPage();
+    } else if (setlistIndex > 0) {
+      openFromSetlist(setlistIndex - 1, -1);
     }
   }
 
@@ -299,8 +389,8 @@
   let titleName = $derived(settings?.userName ? possessiveName(settings.userName) + ' Noten' : 'Meine Noten');
 </script>
 
-<main style="width: 100vw; height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: #121212; color: #fff;">
-  {#if route !== 'detail' && route !== 'edit' && route !== 'selftest' && route !== 'compare'}
+<main style="width: 100vw; height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: #121212; color: #fff; box-sizing: border-box; padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);">
+  {#if route !== 'detail' && route !== 'edit' && route !== 'selftest' && route !== 'compare' && route !== 'setlist'}
     <!-- Navigation Bar -->
     <nav style="display: flex; background: #181818; border-bottom: 1px solid #333; padding: 0 16px; overflow-x: auto; flex-shrink: 0;">
       <button onclick={() => route = 'songs'} style="background: none; border: none; padding: 14px 20px; color: {route === 'songs' ? '#2196f3' : '#aaa'}; font-weight: 500; cursor: pointer; border-bottom: 2px solid {route === 'songs' ? '#2196f3' : 'transparent'};">Lieder ({songs.length})</button>
@@ -386,13 +476,46 @@
       {:else}
         <div style="display: flex; flex-direction: column; gap: 12px;">
           {#each setlists as setlist}
-            <div style="background: #1e1e1e; padding: 16px; border-radius: 8px; border: 1px solid #333;">
+            <button onclick={() => openSetlist(setlist)} style="text-align: left; color: inherit; font: inherit; background: #1e1e1e; padding: 16px; border-radius: 8px; border: 1px solid #333; cursor: pointer; width: 100%;">
               <div style="font-size: 16px; font-weight: 500;">{setlist.title}</div>
-              <div style="font-size: 13px; color: #aaa; margin-top: 4px;">{setlist.songIds.length} Lieder · {setlist.date || 'Kein Datum'}</div>
-            </div>
+              <div style="font-size: 13px; color: #aaa; margin-top: 4px;">{setlistSongs(setlist).length} Lieder · {setlist.date || 'Kein Datum'}</div>
+            </button>
           {/each}
         </div>
       {/if}
+    </div>
+  {:else if route === 'setlist' && currentSetlist}
+    {@const list = setlistSongs(currentSetlist)}
+    {@const resumeIdx = currentSetlist.lastSongId ? list.findIndex(s => s.id === currentSetlist!.lastSongId) : -1}
+    <div style="padding: 12px 16px; background: #1e1e1e; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #333;">
+      <button onclick={() => { currentSetlist = null; route = 'setlists'; }} style="background: #333; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">← Zurück</button>
+      <div style="min-width: 0;">
+        <div style="font-size: 17px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{currentSetlist.title}</div>
+        <div style="font-size: 13px; color: #aaa;">{list.length} Lieder · {currentSetlist.date || 'Kein Datum'}</div>
+      </div>
+    </div>
+    <div style="flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px; max-width: 800px; margin: 0 auto; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px;">
+      {#if list.length > 0}
+        <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+          <button onclick={() => openFromSetlist(0, 0)} style="background: #2196f3; color: white; border: none; padding: 12px 18px; border-radius: 6px; cursor: pointer; font-size: 15px;">▶ Von vorne</button>
+          {#if resumeIdx >= 0}
+            <button onclick={() => openFromSetlist(resumeIdx, currentSetlist!.lastPage)} style="background: #4caf50; color: white; border: none; padding: 12px 18px; border-radius: 6px; cursor: pointer; font-size: 15px;">Weiter bei „{list[resumeIdx].title}“</button>
+          {/if}
+        </div>
+      {:else}
+        <p style="color: #888;">Diese Setlist enthält keine Lieder, die hier vorhanden sind.</p>
+      {/if}
+      {#each list as song, i}
+        <button onclick={() => openFromSetlist(i, 0)} style="text-align: left; color: inherit; font: inherit; background: #1e1e1e; padding: 14px 16px; border-radius: 8px; border: 1px solid {i === resumeIdx ? '#4caf50' : '#333'}; cursor: pointer; display: flex; gap: 14px; align-items: center; width: 100%;">
+          <span style="color: #888; min-width: 1.5em; text-align: right;">{i + 1}.</span>
+          <span style="min-width: 0;">
+            <span style="display: block; font-size: 16px; font-weight: 500;">{song.title}</span>
+            {#if song.artist || song.version}
+              <span style="display: block; font-size: 13px; color: #aaa; margin-top: 2px;">{song.artist} {song.version ? `(${song.version})` : ''}</span>
+            {/if}
+          </span>
+        </button>
+      {/each}
     </div>
   {:else if route === 'edit'}
     <div style="padding: 12px 24px; background: #1e1e1e; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333;">
@@ -471,8 +594,13 @@
   {:else if route === 'detail'}
     <!-- Detail / Notenansicht -->
     <div style="height: 48px; background: #1e1e1e; display: flex; justify-content: space-between; align-items: center; padding: 0 16px; border-bottom: 1px solid #333;">
-      <button onclick={() => route = 'songs'} style="background: #333; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">← Zurück</button>
-      <div style="font-size: 15px; font-weight: 500;">{currentSong?.title}</div>
+      <button onclick={closeDetail} style="background: #333; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">← Zurück</button>
+      <div style="font-size: 15px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px;">
+        {currentSong?.title}
+        {#if setlistIndex >= 0 && currentSetlist}
+          <span style="color: #aaa; font-weight: 400;"> · {setlistIndex + 1}/{setlistSongs(currentSetlist).length}</span>
+        {/if}
+      </div>
       <div style="display: flex; gap: 8px; align-items: center;">
         <button onclick={() => currentSong && startEditSong(currentSong)} style="background: #333; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">Bearbeiten</button>
         <div style="font-size: 13px; color: #aaa;">
@@ -487,10 +615,20 @@
 
     <div style="flex: 1; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #000;">
       {#if currentSong?.sourceType === 'PDF'}
-        <canvas bind:this={canvasEl} style="max-width: 100%; max-height: 100%; object-fit: contain;"></canvas>
-        <!-- Tap zones for turning pages -->
-        <div role="button" tabindex="0" onclick={prevPage} onkeydown={(e) => e.key === 'Enter' && prevPage()} style="position: absolute; left: 0; top: 0; width: 30%; height: 100%; cursor: pointer;"></div>
-        <div role="button" tabindex="0" onclick={nextPage} onkeydown={(e) => e.key === 'Enter' && nextPage()} style="position: absolute; right: 0; top: 0; width: 30%; height: 100%; cursor: pointer;"></div>
+        {#if pdfError}
+          <p style="color: #f88; padding: 24px; text-align: center;">{pdfError}</p>
+        {:else if pdfDoc}
+          <PdfViewer
+            {pdfDoc}
+            pageIndex={currentPage}
+            pageView={settings?.rememberZoom === false ? undefined : currentSong.pageViews[String(currentPage)]}
+            onPageViewChange={handlePageViewChange}
+            onNext={nextPage}
+            onPrev={prevPage}
+          />
+        {:else}
+          <p style="color: #888;">Lade …</p>
+        {/if}
       {:else}
         <div bind:this={osmdContainer} style="width: 100%; height: 100%; overflow: auto; background: white; color: black; padding: 16px;"></div>
       {/if}

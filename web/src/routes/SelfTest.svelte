@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { openDB } from '../lib/storage/db';
-  import { loadPdfDocument, renderPdfPageToCanvas } from '../lib/pdf/pdfRenderer';
+  import { loadPdfDocument, renderPdfPageFitted } from '../lib/pdf/pdfRenderer';
 
   type Status = 'ok' | 'fail' | 'info' | 'running';
 
@@ -88,7 +88,7 @@
       const started = performance.now();
       const doc = await loadPdfDocument(pdfBytes.buffer);
       const canvas = document.createElement('canvas');
-      await renderPdfPageToCanvas(doc, 1, canvas, 1.0);
+      await renderPdfPageFitted(doc, 1, canvas, 200, 200);
       const ms = Math.round(performance.now() - started);
       updateResult(6, 'ok', `pdf.js ${doc.numPages} Seite gerendert (${canvas.width}×${canvas.height} px, ${ms} ms, Worker lokal)`);
       await doc.destroy();

@@ -2,7 +2,7 @@ import type { Song, Setlist, AppSettings } from '../model/types';
 import { songFromJson } from '../logic/serialization';
 
 const DB_NAME = 'meinenoten_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /**
  * Svelte-5-$state liefert Proxys, die IndexedDB nicht klonen kann (DataCloneError).
@@ -28,55 +28,85 @@ export async function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
       }
+      // Ausweichspeicher für Notendateien, wenn OPFS nicht schreibbar ist (Safari/iOS)
+      if (!db.objectStoreNames.contains('files')) {
+        db.createObjectStore('files');
+      }
     };
   });
 }
 
-// OPFS helpers for storing score files
+// Notendateien: bevorzugt OPFS ("opfs://ordner/datei"), sonst IndexedDB ("idb://datei").
+// Safari auf iOS bietet OPFS, aber createWritable() fehlt dort je nach Version.
+
+async function idbFileOp<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('files', mode);
+    const request = op(tx.objectStore('files'));
+    tx.oncomplete = () => resolve(request.result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error('Speichern abgebrochen (Speicherplatz voll?)'));
+  });
+}
+
+function parseFileUri(fileUri: string): { kind: 'opfs' | 'idb'; folder: string; name: string } | null {
+  if (fileUri.startsWith('idb://')) return { kind: 'idb', folder: '', name: fileUri.slice(6) };
+  const parts = fileUri.replace('opfs://', '').split('/');
+  if (parts.length < 2) return null;
+  return { kind: 'opfs', folder: parts[0], name: parts[1] };
+}
+
 export async function saveScoreFile(songId: string, extension: string, data: Blob | ArrayBuffer): Promise<string> {
+  const ext = extension.toLowerCase();
+  const fileName = `${songId}.${ext}`;
+  const blob = data instanceof Blob ? data : new Blob([data], { type: ext === 'pdf' ? 'application/pdf' : 'application/octet-stream' });
   try {
     const root = await navigator.storage.getDirectory();
-    const folderName = extension.toLowerCase() === 'pdf' ? 'songs' : 'musicxml';
+    const folderName = ext === 'pdf' ? 'songs' : 'musicxml';
     const folderHandle = await root.getDirectoryHandle(folderName, { create: true });
-    const fileName = `${songId}.${extension.toLowerCase()}`;
     const fileHandle = await folderHandle.getFileHandle(fileName, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(data);
+    if (typeof (fileHandle as any).createWritable !== 'function') throw new Error('createWritable nicht verfügbar');
+    const writable = await (fileHandle as any).createWritable();
+    await writable.write(blob);
     await writable.close();
     return `opfs://${folderName}/${fileName}`;
   } catch (e) {
-    console.error('Failed to save score in OPFS, falling back to Blob URL', e);
-    // Fallback if OPFS is unavailable
-    const blob = data instanceof Blob ? data : new Blob([data]);
-    return URL.createObjectURL(blob);
+    console.warn('OPFS nicht schreibbar, speichere Notendatei in IndexedDB', e);
+    await idbFileOp('readwrite', store => store.put(blob, fileName));
+    return `idb://${fileName}`;
   }
 }
 
 export async function loadScoreFile(fileUri: string): Promise<File | null> {
-  if (!fileUri || fileUri.startsWith('blob:')) return null;
+  const ref = fileUri ? parseFileUri(fileUri) : null;
+  if (!ref) return null;
   try {
-    // e.g. "opfs://songs/uuid.pdf" or legacy "files/uuid.pdf"
-    const parts = fileUri.replace('opfs://', '').replace('files/', '').split('/');
-    if (parts.length < 2) return null;
-    const [folderName, fileName] = parts;
+    if (ref.kind === 'idb') {
+      const blob = await idbFileOp<Blob | undefined>('readonly', store => store.get(ref.name));
+      return blob ? new File([blob], ref.name, { type: blob.type }) : null;
+    }
     const root = await navigator.storage.getDirectory();
-    const folderHandle = await root.getDirectoryHandle(folderName);
-    const fileHandle = await folderHandle.getFileHandle(fileName);
+    const folderHandle = await root.getDirectoryHandle(ref.folder);
+    const fileHandle = await folderHandle.getFileHandle(ref.name);
     return await fileHandle.getFile();
   } catch (e) {
-    console.error('Failed to load score from OPFS', fileUri, e);
+    console.error('Notendatei nicht gefunden', fileUri, e);
     return null;
   }
 }
 
 export async function deleteScoreFile(fileUri: string): Promise<void> {
+  const ref = fileUri ? parseFileUri(fileUri) : null;
+  if (!ref) return;
   try {
-    const parts = fileUri.replace('opfs://', '').replace('files/', '').split('/');
-    if (parts.length < 2) return;
-    const [folderName, fileName] = parts;
+    if (ref.kind === 'idb') {
+      await idbFileOp('readwrite', store => store.delete(ref.name));
+      return;
+    }
     const root = await navigator.storage.getDirectory();
-    const folderHandle = await root.getDirectoryHandle(folderName);
-    await folderHandle.removeEntry(fileName);
+    const folderHandle = await root.getDirectoryHandle(ref.folder);
+    await folderHandle.removeEntry(ref.name);
   } catch (e) {
     // ignore if not found
   }
