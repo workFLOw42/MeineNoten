@@ -275,10 +275,10 @@
   let titleName = $derived(settings?.userName ? possessiveName(settings.userName) + ' Noten' : 'Meine Noten');
 </script>
 
-<main style="width: 100vw; height: 100vh; display: flex; flex-direction: column; background: #121212; color: #fff;">
+<main style="width: 100vw; height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: #121212; color: #fff;">
   {#if route !== 'detail' && route !== 'edit' && route !== 'selftest' && route !== 'compare'}
     <!-- Navigation Bar -->
-    <nav style="display: flex; background: #181818; border-bottom: 1px solid #333; padding: 0 16px;">
+    <nav style="display: flex; background: #181818; border-bottom: 1px solid #333; padding: 0 16px; overflow-x: auto; flex-shrink: 0;">
       <button onclick={() => route = 'songs'} style="background: none; border: none; padding: 14px 20px; color: {route === 'songs' ? '#2196f3' : '#aaa'}; font-weight: 500; cursor: pointer; border-bottom: 2px solid {route === 'songs' ? '#2196f3' : 'transparent'};">Lieder ({songs.length})</button>
       <button onclick={() => route = 'setlists'} style="background: none; border: none; padding: 14px 20px; color: {route === 'setlists' ? '#2196f3' : '#aaa'}; font-weight: 500; cursor: pointer; border-bottom: 2px solid {route === 'setlists' ? '#2196f3' : 'transparent'};">Setlists ({setlists.length})</button>
       <button onclick={() => route = 'settings'} style="background: none; border: none; padding: 14px 20px; color: {route === 'settings' ? '#2196f3' : '#aaa'}; font-weight: 500; cursor: pointer; border-bottom: 2px solid {route === 'settings' ? '#2196f3' : 'transparent'};">Einstellungen & Sicherung</button>
@@ -292,7 +292,9 @@
       <h3>Selbsttest</h3>
       <div></div>
     </div>
-    <SelfTest />
+    <div style="flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+      <SelfTest />
+    </div>
   {:else if route === 'compare'}
     <div style="padding: 16px 24px; background: #1e1e1e; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333;">
       <button onclick={() => route = 'settings'} style="background: #333; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Abbrechen</button>
